@@ -1,0 +1,10 @@
+python-docx
+Faker
+mimesis
+docx2pdf
+pypdfium2
+pdfminer.six
+PyPDF2
+matplotlib
+sympy
+math2docx
