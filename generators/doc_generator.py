@@ -3,7 +3,7 @@ import random
 import uuid
 import tempfile
 from docx import Document
-from docx.enum.section import WD_SECTION_START
+from docx.enum.section import WD_SECTION_START, WD_ORIENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml import OxmlElement
@@ -21,10 +21,7 @@ colors_list = ['FF0000', '00FF00', '0000FF', 'FFFF00',
                'FF00FF', '00FFFF', 'FFFFFF', '000000']
 
 class DocumentState:
-    """
-    Класс для отслеживания состояния документа, включая текущие колонки,
-    количество оставшихся элементов в многоколонной секции и т.д.
-    """
+    """ Класс для отслеживания состояния документа, включая текущие колонки, ориентацию и т.д. """
     def __init__(self, document):
         self.current_columns = 1  # текущие колонки (1, 2 или 3)
         self.document = document
@@ -32,6 +29,7 @@ class DocumentState:
         self.elements_in_multicol = 0  # счётчик элементов в многоколонной секции
         self.max_elements_multicol = 10  # максимальное количество элементов в секции
         self.in_multicol = False  # флаг, находится ли документ сейчас в многоколонной секции
+        self.current_orientation = WD_ORIENT.PORTRAIT  # текущая ориентация
 
     def can_add_multicolumn(self, num_cols):
         """Проверяет, можно ли добавить секцию с num_cols колонками."""
@@ -83,6 +81,14 @@ class DocumentState:
     def can_start_multicolumn(self):
         """Проверяет, можно ли начать новую многоколонную секцию."""
         return (self.can_add_multicolumn(2) or self.can_add_multicolumn(3))
+
+
+def set_section_orientation(section, orientation=WD_ORIENT.PORTRAIT):
+    """Устанавливает ориентацию секции документа."""
+    new_width, new_height = (section.page_height, section.page_width) if orientation == WD_ORIENT.LANDSCAPE else (section.page_width, section.page_height)
+    section.orientation = orientation
+    section.page_width = new_width
+    section.page_height = new_height
 
 
 def get_table_styles(document):
@@ -451,7 +457,9 @@ def add_table(document, doc_state):
     # добавление таблицы
     table_styles = get_table_styles(document)
     num_rows = random.randint(5, 10)
-    num_cols = random.randint(3, 6)  # уменьшаем количество колонок для меньшего размера
+    num_cols = random.randint(3, 6)
+
+    # уменьшаем количество колонок для меньшего размера
     table = document.add_table(rows=num_rows, cols=num_cols)
     table.style = random.choice(table_styles) if table_styles else 'Table Grid'
     table.alignment = random.choice([
@@ -459,7 +467,7 @@ def add_table(document, doc_state):
         WD_TABLE_ALIGNMENT.CENTER,
         WD_TABLE_ALIGNMENT.RIGHT
     ])
-    
+
     # установка ширины таблицы
     if doc_state.in_multicol:
         if doc_state.current_columns == 2:
@@ -470,14 +478,72 @@ def add_table(document, doc_state):
             table_width = Cm(15)
     else:
         table_width = Cm(18)  # примерная ширина для одноколоночной секции
-    
     table.autofit = False
     for row in table.rows:
         row.height = Pt(12)
     for idx, column in enumerate(table.columns):
         for cell in column.cells:
             cell.width = table_width / num_cols
-            # настройка выравнивания внутри ячейки
+            # очистим существующие параграфы в ячейке
+            cell.text = ""
+
+    # Выбор стиля таблицы
+    table_style_option = random.choice(['random', 'single_color', 'alternating_color'])
+
+    if table_style_option == 'random':
+        # a) Абсолютно случайный стиль
+        for row in table.rows:
+            for cell in row.cells:
+                if random.choice([True, False]):
+                    fill_color = random.choice(colors_list)
+                    shading_elm = OxmlElement('w:shd')
+                    shading_elm.set(qn('w:val'), 'clear')
+                    shading_elm.set(qn('w:color'), 'auto')
+                    shading_elm.set(qn('w:fill'), fill_color)
+                    cell._tc.get_or_add_tcPr().append(shading_elm)
+                # Добавим случайный текст
+                if random.choice([True, False]):
+                    cell.text = fake.text(max_nb_chars=random.randint(5, 50))
+                else:
+                    cell.text = str(fake.random_number(digits=5))
+
+    elif table_style_option == 'single_color':
+        # b) Таблица с единым цветом фона
+        single_color = random.choice(colors_list)
+        for row in table.rows:
+            for cell in row.cells:
+                shading_elm = OxmlElement('w:shd')
+                shading_elm.set(qn('w:val'), 'clear')
+                shading_elm.set(qn('w:color'), 'auto')
+                shading_elm.set(qn('w:fill'), single_color)
+                cell._tc.get_or_add_tcPr().append(shading_elm)
+                # Добавим случайный текст
+                if random.choice([True, False]):
+                    cell.text = fake.text(max_nb_chars=random.randint(5, 50))
+                else:
+                    cell.text = str(fake.random_number(digits=5))
+
+
+    elif table_style_option == 'alternating_color':
+        # c) Таблица с чередующимися цветами строк
+        color_a, color_b = random.sample(colors_list, 2)
+        for row_idx, row in enumerate(table.rows):
+            row_color = color_a if row_idx % 2 == 0 else color_b
+            for cell in row.cells:
+                shading_elm = OxmlElement('w:shd')
+                shading_elm.set(qn('w:val'), 'clear')
+                shading_elm.set(qn('w:color'), 'auto')
+                shading_elm.set(qn('w:fill'), row_color)
+                cell._tc.get_or_add_tcPr().append(shading_elm)
+                # Добавим случайный текст
+                if random.choice([True, False]):
+                    cell.text = fake.text(max_nb_chars=random.randint(5, 50))
+                else:
+                    cell.text = str(fake.random_number(digits=5))
+
+    # Опционально: настройка выравнивания текста в ячейках
+    for row in table.rows:
+        for cell in row.cells:
             cell_paragraph = cell.paragraphs[0]
             cell_paragraph.alignment = random.choice([
                 WD_ALIGN_PARAGRAPH.LEFT,
@@ -485,20 +551,13 @@ def add_table(document, doc_state):
                 WD_ALIGN_PARAGRAPH.RIGHT,
                 WD_ALIGN_PARAGRAPH.JUSTIFY
             ])
-            # установка текста внутри ячейки
-            if random.choice([True, False]):
-                cell.text = fake.text(max_nb_chars=random.randint(5, 50))
-            else:
-                cell.text = str(fake.random_number(digits=5))
-            # установка цвета фона ячейки
-            if random.choice([True, False]):
-                fill_color = random.choice(colors_list)
-                shading_elm = OxmlElement('w:shd')
-                shading_elm.set(qn('w:val'), 'clear')
-                shading_elm.set(qn('w:color'), 'auto')
-                shading_elm.set(qn('w:fill'), fill_color)
-                cell._tc.get_or_add_tcPr().append(shading_elm)
+            # Настройка шрифта
+            if cell_paragraph.runs:
+                run = cell_paragraph.runs[0]
+                run.font.size = Pt(random.randint(8, 12))
+
     # print(f"Добавлена таблица с {num_rows} строками и {num_cols} столбцами.")
+
 
 
 def add_random_elements(document, doc_state, end_footnotes, generated_formulas):
@@ -563,11 +622,13 @@ def add_random_elements(document, doc_state, end_footnotes, generated_formulas):
 
 
 def generate_document(doc_id, output_dir, num_iterations=100):
-    """
-    Генерирует один документ с заданным количеством итераций добавления элементов.
-    """
+    """ Генерирует один документ с заданным количеством итераций добавления элементов. """
     document = Document()
     doc_state = DocumentState(document)
+
+    # Устанавливаем ориентацию первой секции
+    set_section_orientation(document.sections[-1], WD_ORIENT.PORTRAIT)
+
     # добавление колонтитулов
     header_text = fake.sentence(nb_words=4)
     footer_text = fake.sentence(nb_words=4)
@@ -581,6 +642,16 @@ def generate_document(doc_id, output_dir, num_iterations=100):
 
     # основной цикл генерации контента
     for _ in range(num_iterations - 10):
+        # решаем, вставлять ли новую секцию с возможным изменением ориентации
+        if random.random() < 0.2:  # 20% шанс изменить ориентацию
+            # выбираем ориентацию: 20% альбомная, 80% книжная
+            orientation = WD_ORIENT.LANDSCAPE if random.random() < 0.25 else WD_ORIENT.PORTRAIT 
+
+            # добавляем новую секцию
+            section = document.add_section(WD_SECTION_START.NEW_PAGE)
+            set_section_orientation(section, orientation)
+            doc_state.current_orientation = orientation
+
         # решаем, вставлять ли многоколонную секцию
         if doc_state.can_start_multicolumn() and not doc_state.in_multicol:
             if random.random() < 0.05:  # 5% шанс начать многоколонную секцию
@@ -620,8 +691,9 @@ def generate_document(doc_id, output_dir, num_iterations=100):
         print(f"Ошибка при сохранении документа {output_path}: {e}")
 
 
+
 def main():
-    output_dir = './data/docx'
+    output_dir = 'C:/Users/ВИТАЛИЙ/Desktop/data/docx'
     os.makedirs(output_dir, exist_ok=True)
     num_docs = 3  # размер выборки, потом увеличим до 10000
     for doc_id in range(num_docs):
