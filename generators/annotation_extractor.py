@@ -633,7 +633,7 @@ def process_pdf(pdf_path):
             visualize_elements(annotated_image_path, elements, visualization_path, pix_annotated.width, pix_annotated.height)
 
         # #############
-        # # потом убрать:
+        # # ! потом убрать:
         # if page_num == 1:
         #     break
         # ###########
@@ -647,7 +647,7 @@ def main():
             print(f"Успешно обработано: {pdf_path}")
 
             #############
-            # потом убрать:
+            # ! потом убрать:
             break
             ###########
 
