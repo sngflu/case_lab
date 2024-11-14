@@ -19,7 +19,7 @@ FONT_SIZE = 16
 
 def check_overlap(bbox1, bbox2, threshold=0.1):
     """
-    Проверка перекрытия блоков с более строгим порогом.
+    Проверка перекрытия блоков с порогом.
     Порог — это минимальная доля пересечения по меньшей площади из двух блоков.
     """
     x1_min, y1_min, x1_max, y1_max = bbox1
@@ -47,9 +47,11 @@ def check_overlap(bbox1, bbox2, threshold=0.1):
 def are_bboxes_close(bbox1, bbox2, threshold_x=5, threshold_y=2, overlap_threshold=0.0001):
     """Проверяет, находятся ли два bbox достаточно близко друг к другу."""
     
+    # распаковка координат
     x0_1, y0_1, x1_1, y1_1 = bbox1
     x0_2, y0_2, x1_2, y1_2 = bbox2
     
+    # проверка близости по горизонтали
     def check_horizontal_proximity():
         # если один bbox справа от другого
         if x0_1 > x1_2:
@@ -58,6 +60,7 @@ def are_bboxes_close(bbox1, bbox2, threshold_x=5, threshold_y=2, overlap_thresho
             return (x0_2 - x1_1) < threshold_x
         return True
     
+    # проверка близости по вертикали
     def check_vertical_proximity():
         # если один bbox выше другого
         if y0_1 > y1_2:
@@ -66,7 +69,7 @@ def are_bboxes_close(bbox1, bbox2, threshold_x=5, threshold_y=2, overlap_thresho
             return (y0_2 - y1_1) < threshold_y
         return True
     
-    # bbox считаются близкими если они либо перекрываются
+    # bbox считаются близкими если они либо перекрываются,
     # либо находятся достаточно близко друг к другу по обеим осям
     return check_overlap(bbox1, bbox2, threshold=overlap_threshold) or (check_horizontal_proximity() and check_vertical_proximity())
 
@@ -99,9 +102,7 @@ def visualize_elements(image_path, elements, output_path, page_width, page_heigh
         "header": (0, 128, 128, 80),
         "footer": (128, 0, 0, 80),
         "footnote": (0, 128, 0, 80),
-        "formula": (0, 0, 128, 80),
-        "multicolumn_2": (255, 165, 0, 80),
-        "multicolumn_3": (75, 0, 130, 80)
+        "formula": (0, 0, 128, 80)
     }
 
     # масштабируем координаты в соответствии с размерами страницы
@@ -150,69 +151,46 @@ def visualize_elements(image_path, elements, output_path, page_width, page_heigh
 
     img.save(output_path)
 
+def is_inside(box1, box2, tolerance=0):
+        """Проверяет, находится ли box1 внутри box2 с учетом погрешности."""
+        return (box1[0] >= box2[0] - tolerance and box1[1] >= box2[1] - tolerance and 
+                box1[2] <= box2[2] + tolerance and box1[3] <= box2[3] + tolerance)
 
-def merge_blocks(elements):
-    """
-    Объединяет блоки согласно правилам:
-    1. Удаление вложенных блоков одного типа
-    2. Объединение пересекающихся блоков
-    3. Объединение близких последовательных блоков одного типа
-    4. Учет многоколонных секций
-    """
+def merge_boxes(box1, box2):
+    """Объединяет два бокса"""
+    return [
+        min(box1[0], box2[0]),  # x0
+        min(box1[1], box2[1]),  # y0
+        max(box1[2], box2[2]),  # x1
+        max(box1[3], box2[3])   # y1
+    ]
 
-    if not isinstance(elements, dict):
-        raise TypeError('elements должен быть словарём')
-
-    def is_inside(box1, box2):
-        """Проверяет, находится ли box1 внутри box2"""
-        return (box1[0] >= box2[0] and box1[1] >= box2[1] and 
-                box1[2] <= box2[2] and box1[3] <= box2[3])
-
-    def do_overlap(box1, box2):
+def do_overlap(box1, box2):
         """Проверяет, пересекаются ли боксы"""
         return not (box1[2] <= box2[0] or  # box1 слева от box2
                    box1[0] >= box2[2] or   # box1 справа от box2
                    box1[3] <= box2[1] or   # box1 выше box2
                    box1[1] >= box2[3])     # box1 ниже box2
 
-    def merge_boxes(box1, box2):
-        """Объединяет два бокса"""
-        return [
-            min(box1[0], box2[0]),  # x0
-            min(box1[1], box2[1]),  # y0
-            max(box1[2], box2[2]),  # x1
-            max(box1[3], box2[3])   # y1
-        ]
+def merge_blocks(elements):
+    """Объединяет блоки одного типа"""
 
-    def is_vertically_close(box1, box2, max_gap=50):
+    if not isinstance(elements, dict):
+        raise TypeError('elements должен быть словарём')
+
+    def is_vertically_close(box1, box2, max_gap=15):
         """Проверяет, находятся ли боксы достаточно близко по вертикали"""
         vertical_gap = abs(box1[3] - box2[1]) if box1[3] < box2[1] else abs(box2[3] - box1[1])
         horizontal_overlap = not (box1[2] < box2[0] or box1[0] > box2[2])
         return vertical_gap <= max_gap and horizontal_overlap
 
-    def is_horizontally_close(box1, box2, max_gap=50):
+    def is_horizontally_close(box1, box2, type_of_block, max_gap=5):
         """Проверяет, находятся ли боксы достаточно близко по горизонтали"""
+        if type_of_block == 'marked_list' or type_of_block == 'numbered_list':
+            max_gap = 30
         horizontal_gap = abs(box1[2] - box2[0]) if box1[2] < box2[0] else abs(box2[2] - box1[0])
         vertical_overlap = not (box1[3] < box2[1] or box1[1] > box2[3])
         return horizontal_gap <= max_gap and vertical_overlap
-
-    def get_column_number(box, multicolumn_area):
-        """Определяет номер колонки для бокса в многоколонной области"""
-        if not is_inside(box, multicolumn_area):
-            return None
-            
-        area_width = multicolumn_area[2] - multicolumn_area[0]
-        relative_x = box[0] - multicolumn_area[0]
-        
-        if multicolumn_area in elements.get("multicolumn_2", []):
-            return 1 if relative_x < area_width/2 else 2
-        else:  # multicolumn_3
-            if relative_x < area_width/3:
-                return 1
-            elif relative_x < (2 * area_width/3):
-                return 2
-            else:
-                return 3
 
     def process_column_blocks(blocks_in_column):
         """Обрабатывает блоки внутри одной колонки"""
@@ -227,6 +205,8 @@ def merge_blocks(elements):
             j = i + 1
             while j < len(blocks_in_column):
                 if blocks_in_column[i]['type'] == blocks_in_column[j]['type']:
+                    type_of_block = blocks_in_column[i]['type']
+
                     box1 = blocks_in_column[i]['coords']
                     box2 = blocks_in_column[j]['coords']
                     
@@ -245,7 +225,7 @@ def merge_blocks(elements):
                             should_merge = True
                         elif is_vertically_close(box1, box2):
                             should_merge = True
-                        elif is_horizontally_close(box1, box2):
+                        elif is_horizontally_close(box1, box2, type_of_block):
                             should_merge = True
                     
                     if should_merge:
@@ -257,11 +237,6 @@ def merge_blocks(elements):
             i += 1
         
         return blocks_in_column
-
-    # получаем все многоколонные области
-    multicolumn_2 = elements.get("multicolumn_2", [])
-    multicolumn_3 = elements.get("multicolumn_3", [])
-    multicolumn_areas = multicolumn_2 + multicolumn_3
     
     # создаем список всех блоков
     all_blocks = []
@@ -279,33 +254,10 @@ def merge_blocks(elements):
     if not all_blocks:
         return elements
 
-    # обрабатываем блоки в многоколонных секциях
     processed_blocks = []
-    blocks_in_multicolumn = set()
-
-    for area in multicolumn_areas:
-        if not isinstance(area, (list, tuple)) or len(area) != 4:
-            continue
-            
-        num_columns = 2 if area in multicolumn_2 else 3
-        columns = [[] for _ in range(num_columns)]
-        
-        for block in all_blocks:
-            if is_inside(block['coords'], area):
-                col_num = get_column_number(block['coords'], area)
-                if col_num is not None:
-                    col_num -= 1
-                    if 0 <= col_num < num_columns:
-                        columns[col_num].append(block)
-                        blocks_in_multicolumn.add(id(block))
-    
-        # обрабатываем каждую колонку отдельно
-        for column_blocks in columns:
-            processed_blocks.extend(process_column_blocks(column_blocks))
     
     # обрабатываем оставшиеся блоки
-    remaining_blocks = [block for block in all_blocks 
-                       if id(block) not in blocks_in_multicolumn]
+    remaining_blocks = [block for block in all_blocks]
     processed_blocks.extend(process_column_blocks(remaining_blocks))
     
     result = {}
@@ -316,33 +268,134 @@ def merge_blocks(elements):
     
     # группируем обработанные блоки по типам
     for block_type in elements:
-        if block_type not in ["multicolumn_2", "multicolumn_3", 
-                            "image_path", "image_height", "image_width"]:
+        if block_type not in ["image_path", "image_height", "image_width"]:
             result[block_type] = []
     
     # заполняем результат обработанными блоками
     for block in processed_blocks:
         if block['type'] in result:
             result[block['type']].append(block['coords'])
-    
-    # добавляем многоколонные секции без изменений
-    result["multicolumn_2"] = multicolumn_2
-    result["multicolumn_3"] = multicolumn_3
-    
+
+    # ещё раз отдельно пройдём по формулам и склеим их, где надо
+    if result['formula']:
+        
+        k = len(result['formula'])
+        for _ in range(min(k, 4)):
+            result_formula_len = len(result['formula'])
+            new_result = result.copy()
+            new_result['formula'] = []
+            used_indices = set()  # отслеживаем использованные индексы
+            
+            for i in range(result_formula_len):
+                if i in used_indices:  # пропускаем уже использованные элементы
+                    continue
+                    
+                was_merged = False
+                bbox1 = result['formula'][i]
+                
+                for j in range(i + 1, result_formula_len):
+                    if j in used_indices:  # пропускаем уже использованные элементы
+                        continue
+                        
+                    bbox2 = result['formula'][j]
+                    if are_bboxes_close(bbox1, bbox2):
+                        new_result['formula'].append(merge_boxes(bbox1, bbox2))
+                        used_indices.add(i)
+                        used_indices.add(j)
+                        was_merged = True
+                        break
+                        
+                if not was_merged and i not in used_indices:
+                    new_result['formula'].append(bbox1)
+                    
+            # добавляем оставшиеся неиспользованные элементы
+            for i in range(result_formula_len):
+                if i not in used_indices:
+                    new_result['formula'].append(result['formula'][i])
+                    
+            result = new_result.copy()
+        new_result = result.copy()
+        result['formula'] = []
+        for bbox in new_result['formula']:
+            if not (bbox in result['formula']):
+                result['formula'].append(bbox)
+        
+        new_result = result.copy()
+        new_result['formula'] = []
+        for i in range(len(result['formula'])):
+            bbox1 = result['formula'][i]
+            to_check = result['formula'][:i] + result['formula'][i+1:]
+            if not any(is_inside(bbox1, bbox2) for bbox2 in to_check):
+                new_result['formula'].append(bbox1)
+        result = new_result.copy()
+
+    # ещё раз отдельно пройдём по paragraph'ам и тоже досклеим их
+    if result['paragraph']:
+        
+        k = len(result['paragraph'])
+        for _ in range(2):
+            result_paragraph_len = len(result['paragraph'])
+            new_result = result.copy()
+            new_result['paragraph'] = []
+            used_indices = set()  # отслеживаем использованные индексы
+            
+            for i in range(result_paragraph_len):
+                if i in used_indices:  # пропускаем уже использованные элементы
+                    continue
+                    
+                was_merged = False
+                bbox1 = result['paragraph'][i]
+                
+                for j in range(i + 1, result_paragraph_len):
+                    if j in used_indices:  # пропускаем уже использованные элементы
+                        continue
+                        
+                    bbox2 = result['paragraph'][j]
+                    if do_overlap(bbox1, bbox2):
+                        new_result['paragraph'].append(merge_boxes(bbox1, bbox2))
+                        used_indices.add(i)
+                        used_indices.add(j)
+                        was_merged = True
+                        break
+                        
+                if not was_merged and i not in used_indices:
+                    new_result['paragraph'].append(bbox1)
+                    
+            # добавляем оставшиеся неиспользованные элементы
+            for i in range(result_paragraph_len):
+                if i not in used_indices:
+                    new_result['paragraph'].append(result['paragraph'][i])
+                    
+            result = new_result.copy()
+        new_result = result.copy()
+        result['paragraph'] = []
+        for bbox in new_result['paragraph']:
+            if not (bbox in result['paragraph']):
+                result['paragraph'].append(bbox)
+        
+        new_result = result.copy()
+        new_result['paragraph'] = []
+        for i in range(len(result['paragraph'])):
+            bbox1 = result['paragraph'][i]
+            to_check = result['paragraph'][:i] + result['paragraph'][i+1:]
+            if not any(is_inside(bbox1, bbox2) for bbox2 in to_check):
+                new_result['paragraph'].append(bbox1)
+        result = new_result.copy()
+
     return result
 
-def extract_elements(page):
-    """
-    Извлекает элементы страницы и определяет их типы.
-    """
+def extract_elements(page, image_filename):
+    """Извлекает элементы страницы и определяет их типы."""
+    
     page_dict = page.get_text("dict")
     page_width = page.rect.width
     page_height = page.rect.height
+
+    header_threshold = 0.085 * page_height  
+    footer_threshold = 0.085 * page_height
     
     elements = {
         "table": [],
-        "multicolumn_2": [],
-        "multicolumn_3": [],
         "title": [],
         "paragraph": [],
         "formula": [],
@@ -355,7 +408,8 @@ def extract_elements(page):
         "picture_signature": [],
         "picture": [],
         "image_width": float(page_width),
-        "image_height": float(page_height)
+        "image_height": float(page_height),
+        "image_path": os.path.join(IMAGE_DIR, image_filename)
     }
 
     # 1. Находим все рисунки (используем оба метода)
@@ -386,18 +440,8 @@ def extract_elements(page):
     tables = page.find_tables()
     for table in tables:
         bbox = [float(x) for x in table.bbox]
-        if len(table.cells) == 1 and len(table.cells[0]) > 1:
-            if len(table.cells[0]) == 2:
-                elements["multicolumn_2"].append(bbox)
-            elif len(table.cells[0]) == 3:
-                elements["multicolumn_3"].append(bbox)
-            else:
-                elements["table"].append(bbox)
-                restricted_areas.append(bbox)
-        else:
-            elements["table"].append(bbox)
-            restricted_areas.append(bbox)
-
+        elements["table"].append(bbox)
+        restricted_areas.append(bbox)
 
     # 3. Собираем текстовые блоки
     text_blocks = []
@@ -412,7 +456,7 @@ def extract_elements(page):
                     continue
 
                 bbox = [float(x) for x in span["bbox"]]
-                
+
                 # пропускаем блоки в запрещенных областях
                 if any(check_overlap(bbox, area) for area in restricted_areas):
                     continue
@@ -420,24 +464,20 @@ def extract_elements(page):
                 font = span.get("font", "").lower()
                 color = span.get("color", "")
                 is_not_black = bool(color and color not in ["", "black", "#000000", "(0, 0, 0)", "000000"])
+                is_bold = ('bold' in span['font'].lower())
 
                 block_info = {
                     "bbox": bbox,
                     "text": text,
                     "font": font,
                     "is_not_black": is_not_black,
-                    "y_coord": bbox[1]
+                    "y_coord": bbox[1],
+                    "is_bold": is_bold
                 }
                 text_blocks.append(block_info)
 
     # сортируем блоки по вертикали
     text_blocks.sort(key=lambda x: x["y_coord"])
-
-    # 4. Определяем header и footer
-    if text_blocks:
-        elements["header"].append(text_blocks[0]["bbox"])
-        elements["footer"].append(text_blocks[-1]["bbox"])
-        text_blocks = text_blocks[1:-1]
 
     was_annons_of_endnotes = False
 
@@ -446,13 +486,19 @@ def extract_elements(page):
         text = block["text"]
         bbox = list(block["bbox"])
         font = block["font"]
+        y_coord = bbox[1]
         
         block_type = None
 
+        # 0. проверяем header и footer
+        if y_coord >= (page_height - footer_threshold):
+            elements["footer"].append(bbox)
+        elif y_coord <= header_threshold:
+            elements["header"].append(bbox)
+
         # 1. проверяем, было ли объявление концевых сносок
-        if was_annons_of_endnotes:
-            block_type = 'paragraph'  # будем считать их просто текстом, ведь хоть там и есть маркировка цифрами
-            # но это не является настоящим word списком
+        elif was_annons_of_endnotes:
+            block_type = 'numbered_list'
 
         # 2. проверяем формулы
         elif block['font'] == 'cambria math':
@@ -464,15 +510,16 @@ def extract_elements(page):
         elif re.match(r'^\d+\.', text.strip()):
             block_type = "numbered_list"
 
-        # 4. проверяем заголовки и подписи таблиц
-        elif block["is_not_black"]:
-            if text.startswith("Таблица") or text.startswith("Табл."):
-                block_type = "table_signature"
-            else:
-                block_type = "title"
+        # 4. проверяем подписи таблиц
+        elif re.match(r'^(Табл\.\s+\d+\.\s|Таблица\s+\d+\s-\s|Таблица\.)', text):
+            block_type = "table_signature"
+        
+        # 5. проверяем заголовки
+        elif block["is_bold"]:
+            block_type = "title"
                 
-        # 5. проверяем подписи
-        elif text.startswith("Рис"):
+        # 6. проверяем подписи рисунков
+        elif re.match(r'^(Рис\.|Рисунок)\s+\d+', text):
             block_type = "picture_signature"
         else:
             block_type = "paragraph"
@@ -524,91 +571,23 @@ def extract_elements(page):
         if block['text'][0] + block['text'][-1] == '[]':
             bbox = list(block["bbox"])
             elements['footnote'].append(bbox)
-
-    # ещё раз отдельно пройдём по формулам и склеим их, где надо
-    def merge_boxes(box1, box2):
-        """Объединяет два бокса"""
-        return [
-            min(box1[0], box2[0]),  # x0
-            min(box1[1], box2[1]),  # y0
-            max(box1[2], box2[2]),  # x1
-            max(box1[3], box2[3])   # y1
-        ]
     
-    k = len(elements['formula'])
-    for _ in range(min(k, 4)):
-        elems_formula_len = len(elements['formula'])
-        new_elements = elements.copy()
-        new_elements['formula'] = []
-        used_indices = set()  # отслеживаем использованные индексы
-        
-        for i in range(elems_formula_len):
-            if i in used_indices:  # пропускаем уже использованные элементы
-                continue
-                
-            was_merged = False
-            bbox1 = elements['formula'][i]
-            
-            for j in range(i + 1, elems_formula_len):
-                if j in used_indices:  # пропускаем уже использованные элементы
-                    continue
-                    
-                bbox2 = elements['formula'][j]
-                if are_bboxes_close(bbox1, bbox2):
-                    new_elements['formula'].append(merge_boxes(bbox1, bbox2))
-                    used_indices.add(i)
-                    used_indices.add(j)
-                    was_merged = True
-                    break
-                    
-            if not was_merged and i not in used_indices:
-                new_elements['formula'].append(bbox1)
-                
-        # добавляем оставшиеся неиспользованные элементы
-        for i in range(elems_formula_len):
-            if i not in used_indices:
-                new_elements['formula'].append(elements['formula'][i])
-                
-        elements = new_elements.copy()
-    new_elements = elements.copy()
-    elements['formula'] = []
-    for bbox in new_elements['formula']:
-        if not (bbox in elements['formula']):
-            elements['formula'].append(bbox)
     return elements
-
-
-def annotate_figures(page, pdf_name, page_num):
-    """Разметка рисунков на странице с использованием встроенных методов PyMuPDF."""
-    image_list = page.get_images(full=True)
-    for img_index, img in enumerate(image_list):
-        xref = img[0]
-        blocks = page.get_text("dict")["blocks"]
-        for block in blocks:
-            if block.get('type') == 1 and block.get('image') == xref:
-                bbox = block['bbox']
-                x0, y0, x1, y1 = bbox
-                page.insert_text(
-                    point=(x0, y1 + 5),  
-                    text=f"Рисунок {img_index + 1}",
-                    fontsize=12,
-                    color=(1, 0, 0),  
-                    fontname="helv"
-                )
-                # добавление рамки вокруг изображения
-                annot = page.add_rect_annot(bbox)
-                annot.set_border(width=1)
-                annot.set_colors(stroke=(1, 0, 0))  
-                annot.update()
-                break  # предполагаем только одно соответствие на изображение
 
 def process_pdf(pdf_path):
     doc = fitz.open(pdf_path)
     pdf_name = os.path.splitext(os.path.basename(pdf_path))[0]
+    
     for page_num in range(len(doc)):
-    # for page_num in range(16, 17):
         page = doc.load_page(page_num)
-        elements = extract_elements(page)
+
+        image_filename = f"{pdf_name}_{page_num + 1}.png"   
+        image_path = os.path.join(IMAGE_DIR, image_filename)
+        if not os.path.exists(image_path):
+            print(f"Изображение не найдено: {image_path}, пропуск страницы.")
+            continue
+
+        elements = extract_elements(page, image_filename)
 
         # сохранение JSON
         json_filename = f"{pdf_name}_{page_num + 1}.json"
@@ -616,40 +595,34 @@ def process_pdf(pdf_path):
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(elements, f, ensure_ascii=False, indent=4)
 
-        # разметка рисунков
-        annotate_figures(page, pdf_name, page_num)
-
-        zoom = 300 / 72  
-        mat = fitz.Matrix(zoom, zoom)
-        pix_annotated = page.get_pixmap(matrix=mat)
-        annotated_image_filename = f"{pdf_name}_{page_num + 1}_annotated.png"
-        annotated_image_path = os.path.join(IMAGE_DIR, annotated_image_filename)
-        pix_annotated.save(annotated_image_path)
-
-        # Визуализация
+        # визуализация
         if VISUALISE:
+            zoom = 300 / 72  
+            mat = fitz.Matrix(zoom, zoom)
+            pix = page.get_pixmap(matrix=mat)
+            
+            # создаем временный путь для базового изображения
+            temp_image_path = os.path.join(IMAGE_DIR, f"{pdf_name}_{page_num + 1}_temp.png")
+            pix.save(temp_image_path)
+
             visualization_filename = f"{pdf_name}_{page_num + 1}_vis.png"
             visualization_path = os.path.join(VISUAL_DIR, visualization_filename)
-            visualize_elements(annotated_image_path, elements, visualization_path, pix_annotated.width, pix_annotated.height)
+            visualize_elements(temp_image_path, elements, visualization_path, pix.width, pix.height)
+            
+            # удаляем временный файл
+            os.remove(temp_image_path)
 
-        # #############
-        # # ! потом убрать:
-        # if page_num == 1:
-        #     break
-        # ###########
+    doc.close()
 
 def main():
+    print("Обработка начата...")
+    cnt = 1
     for filename in os.listdir(PDF_DIR):
         if filename.lower().endswith('.pdf'):
             pdf_path = os.path.join(PDF_DIR, filename)
-            print(f"Обработка: {pdf_path}")
             process_pdf(pdf_path)
-            print(f"Успешно обработано: {pdf_path}")
-
-            #############
-            # ! потом убрать:
-            break
-            ###########
+            print(f"Успешно обработано {cnt} файлов")
+            cnt += 1
 
 if __name__ == "__main__":
     main()

@@ -3,13 +3,13 @@ import random
 import uuid
 import tempfile
 from docx import Document
-from docx.shared import Cm, Pt, Inches, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Cm, Pt, Inches, RGBColor, Mm
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
 from docx.enum.table import WD_TABLE_ALIGNMENT
-from docx.enum.section import WD_SECTION_START, WD_ORIENT, WD_SECTION
-from docx.oxml import OxmlElement, ns
+from docx.enum.section import WD_SECTION_START, WD_ORIENT
+from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.oxml.ns import nsdecls
+from docx.enum.dml import MSO_THEME_COLOR_INDEX
 from faker import Faker
 import math2docx
 import matplotlib.pyplot as plt
@@ -18,7 +18,52 @@ import matplotlib.pyplot as plt
 fake = Faker('ru_RU')
 
 # константы для цвета фона таблиц
-colors_list = ['FF0000', '00FF00', '0000FF', 'FFFF00', 'FF00FF', '00FFFF', 'FFFFFF', '000000']
+colors_list = [
+    # базовые цвета
+    'FFFFFF',  # White
+    '000000',  # Black
+        
+    # оттенки серого
+    'F5F5F5',  # WhiteSmoke
+    'E0E0E0',  # Light Gray
+    'CCCCCC',  # Silver
+    '808080',  # Gray
+        
+    # синие тона
+    'ECF0F1',  # Cloud
+    'D6EAF8',  # Light Blue
+    'AED6F1',  # Soft Blue
+    '3498DB',  # Dodger Blue
+    '2E86C1',  # Ocean Blue
+        
+    # зеленые тона
+    'E8F5E9',  # Mint Cream
+    'A2D9CE',  # Light Sea Green
+    '27AE60',  # Nephritis
+    '1E8449',  # Forest Green
+       
+    # красные тона
+    'FADBD8',  # Misty Rose
+    'F1948A',  # Light Coral
+    'E74C3C',  # Alizarin
+    'C0392B',  # Dark Red
+        
+    # желтые и оранжевые тона
+    'FEF9E7',  # Light Yellow
+    'FCF3CF',  # Cream
+    'F7DC6F',  # Sandstone
+    'F39C12',  # Orange
+        
+    # фиолетовые тона
+    'F4ECF7',  # Lavender Mist
+    'D7BDE2',  # Plum
+    '8E44AD',  # Purple
+        
+    # коричневые тона
+    'FDEBD0',  # Antique White
+    'E59866',  # Peru
+    'BA4A00'   # Saddle Brown
+]
 
 class DocumentState:
     """Класс для отслеживания состояния документа, включая текущие колонки, ориентацию и т.д."""
@@ -28,12 +73,15 @@ class DocumentState:
         self.multicol_sections_added = {'2': False, '3': False}
         self.elements_in_multicol = 0  # счётчик элементов в многоколонной секции
         self.max_elements_multicol = 10  # максимальное количество элементов в секции
+        self.min_elements_per_column = 2  # минимальное количество элементов на колонку
+        self.required_elements = 0  # общее требуемое количество элементов
         self.in_multicol = False  # флаг, находится ли документ сейчас в многоколонной секции
         self.current_orientation = WD_ORIENT.PORTRAIT  # текущая ориентация
-        self.multicol_table = None  # Таблица, используемая для многоколонной секции
-        self.current_multicol_cell = None  # Текущая ячейка таблицы для вставки контента
-        self.multicol_col_index = 0  # Индекс текущей колонки
-    
+        self.multicol_table = None  # таблица, используемая для многоколонной секции
+        self.current_multicol_cell = None  # текущая ячейка таблицы для вставки контента
+        self.multicol_col_index = 0  # индекс текущей колонки
+        self.column_elements = []
+
     def can_add_multicolumn(self, num_cols):
         """Проверяет, можно ли добавить секцию с num_cols колонками."""
         return not self.multicol_sections_added.get(str(num_cols), False)
@@ -43,36 +91,42 @@ class DocumentState:
         if not self.can_add_multicolumn(num_cols):
             return False
 
-        # создаём таблицу с нужным количеством колонок
-        table = self.document.add_table(rows=1, cols=num_cols)
-        table.autofit = False  # Отключаем автонастройку размера
+        self.document.add_paragraph()
 
-        # настраиваем ячейки таблицы для полной прозрачности
+        table = self.document.add_table(rows=1, cols=num_cols)
+        table.autofit = False
+
+        # используем практически всю ширину страницы
+        section = self.document.sections[-1]
+        page_width = section.page_width
+        margin_left = Inches(1.2)  
+        margin_right = Inches(0.6)  
+        
+        # используем максимальную возможную ширину
+        usable_width = page_width - margin_left - margin_right
+        column_width = usable_width / num_cols
+
         for row in table.rows:
             for cell in row.cells:
-                # устанавливаем прозрачность границ ячейки
-                tc = cell._tc
-                tcPr = tc.get_or_add_tcPr()
-                tcBorders = OxmlElement('w:tcBorders')
-                for border_name in ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']:
-                    border = OxmlElement(f'w:{border_name}')
-                    border.set(qn('w:val'), 'nil')  
-                    tcBorders.append(border)
-                tcPr.append(tcBorders)
+                cell.width = column_width
+                # убираем все отступы внутри ячеек
+                for paragraph in cell.paragraphs:
+                    paragraph.paragraph_format.space_after = 0
+                    paragraph.paragraph_format.space_before = 0
+                    paragraph.paragraph_format.left_indent = 0
+                    paragraph.paragraph_format.right_indent = 0
 
-                # убираем заливку (фон) ячейки, если она есть
-                cell_shading = OxmlElement('w:shd')
-                cell_shading.set(qn('w:val'), 'clear')  
-                tcPr.append(cell_shading)
+        table.alignment = WD_TABLE_ALIGNMENT.CENTER
 
         self.multicol_table = table
         self.current_multicol_cell = table.rows[0].cells[0]
         self.multicol_col_index = 0
-
         self.current_columns = num_cols
         self.in_multicol = True
         self.elements_in_multicol = 0
         self.multicol_sections_added[str(num_cols)] = True
+        self.column_elements = [0] * num_cols
+
         return True
 
     def end_multicolumn(self):
@@ -80,25 +134,54 @@ class DocumentState:
         if not self.in_multicol:
             return
 
-        # добавляем перенос строки после таблицы для разделения
-        self.document.add_paragraph()
-
+        # добавляем новую секцию
+        new_section = self.document.add_section(WD_SECTION_START.CONTINUOUS)
+        
+        # добавляем пустой параграф в новой секции
+        p = self.document.add_paragraph()
+        
         # сбрасываем состояния
         self.multicol_table = None
         self.current_multicol_cell = None
         self.multicol_col_index = 0
         self.current_columns = 1
         self.in_multicol = False
+        self.elements_in_multicol = 0
+        self.required_elements = 0
+        self.column_elements = []
 
     def get_current_multicol_cell(self):
-        """Возвращает текущую ячейку таблицы для вставки контента и обновляет индекс колонки при необходимости."""
+        """Возвращает текущую ячейку таблицы для вставки контента."""
         if not self.in_multicol or not self.multicol_table:
             return None
-
+            
+        # проверяем, есть ли колонки без элементов
+        empty_columns = [i for i, count in enumerate(self.column_elements) if count == 0]
+        
+        if empty_columns:
+            # если есть пустые колонки, берем первую из них
+            self.multicol_col_index = empty_columns[0]
+        else:
+            # если все колонки имеют элементы, используем обычную ротацию
+            self.multicol_col_index = (self.multicol_col_index + 1) % self.current_columns
+            
         cell = self.multicol_table.rows[0].cells[self.multicol_col_index]
-        # обновляем индекс колонки для следующего элемента
-        self.multicol_col_index = (self.multicol_col_index + 1) % self.current_columns
+        self.column_elements[self.multicol_col_index] += 1
         return cell
+
+    def is_column_filled(self):
+        """Проверяет, заполнена ли текущая колонка минимальным количеством элементов"""
+        elements_in_current_column = self.elements_in_multicol % self.current_columns
+        return elements_in_current_column >= self.min_elements_per_column
+
+    def can_end_multicolumn(self):
+        """Проверяет, можно ли завершить многоколонную секцию"""
+        # проверяем, что все колонки содержат хотя бы один элемент
+        has_empty_columns = any(count == 0 for count in self.column_elements)
+        min_elements_satisfied = all(count >= self.min_elements_per_column for count in self.column_elements)
+        total_elements_satisfied = self.elements_in_multicol >= self.required_elements
+        
+        return not has_empty_columns and min_elements_satisfied and total_elements_satisfied
 
     def can_start_multicolumn(self):
         """Проверяет, можно ли начать новую многоколонную секцию."""
@@ -118,8 +201,22 @@ def add_table_caption(document, before=True):
 
     p = document.add_paragraph(caption_text, style='Caption')
     p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+    # настройка цвета шрифта (синий или чёрный)
+    color = random.choice(['blue', 'black'])
+    if color == 'blue':
+        p.runs[0].font.color.theme_color = MSO_THEME_COLOR_INDEX.ACCENT_1  # стандартный голубоватый
+    else:
+        p.runs[0].font.color.rgb = RGBColor(0, 0, 0)  # чёрный
+
+    # настройка размера шрифта
     p.runs[0].font.size = Pt(random.randint(10, 12))
-    p.runs[0].font.italic = True
+
+    # настройка начертания (курсивное или прямое)
+    p.runs[0].font.italic = random.choice([True, False])
+
+    # настройка жирности шрифта (жирный или простой)
+    p.runs[0].font.bold = random.choice([True, False])
 
 def add_table(document, doc_state):
     """Добавляет таблицу с подписью в документ, случайно располагая подпись перед или после таблицы."""
@@ -141,7 +238,25 @@ def add_table(document, doc_state):
 
     # создаём таблицу
     table = document.add_table(rows=num_rows, cols=num_cols)
-    table.style = random.choice(table_styles) if table_styles else 'Table Grid'
+    
+    # выбор стиля таблицы согласно заданным вероятностям
+    style_choice = random.random() * 100  # Генерируем число от 0 до 100
+
+    if style_choice < 45:  # 45% вероятность белой таблицы
+        table_style_option = 'white'
+        # для белых таблиц всегда используем стиль с границами
+        table.style = 'Table Grid'
+    else:
+        # для остальных типов таблиц используем случайный стиль
+        table.style = random.choice(table_styles) if table_styles else 'Table Grid'
+        
+        if style_choice < 70:  # 25% вероятность одноцветной таблицы
+            table_style_option = 'single_color'
+        elif style_choice < 95:  # 25% вероятность чередующихся цветов
+            table_style_option = 'alternating_color'
+        else:  # 5% вероятность случайных цветов
+            table_style_option = 'random'
+
     table.alignment = random.choice([
         WD_TABLE_ALIGNMENT.LEFT,
         WD_TABLE_ALIGNMENT.CENTER,
@@ -150,76 +265,64 @@ def add_table(document, doc_state):
     table.autofit = False
 
     # установка ширины таблицы
-    table_width = Cm(18)  
+    table_width = Cm(18)
 
-    # генерация цветов для альтернативного стиля
-    alternating_style = False
-    color_a, color_b = None, None
+    # инициализация цветов для alternating_color
+    if table_style_option == 'alternating_color':
+        # выбираем два разных цвета, исключая белый (FFFFFF)
+        available_colors = [c for c in colors_list if c != 'FFFFFF']
+        color_a, color_b = random.sample(available_colors, 2)
+    elif table_style_option == 'single_color':
+        # выбираем один цвет, исключая белый (FFFFFF)
+        available_colors = [c for c in colors_list if c != 'FFFFFF']
+        single_color = random.choice(available_colors)
 
     for row_idx, row in enumerate(table.rows):
         row.height = Pt(12)
         for idx, cell in enumerate(row.cells):
             cell.width = table_width / num_cols
-            cell.text = ""  
+            cell.text = ""
 
-            # выбор стиля таблицы
-            table_style_option = random.choice(['random', 'single_color', 'alternating_color'])
-            if table_style_option == 'alternating_color':
-                if not alternating_style:
-                    # инициализируем цвета для чередования
-                    color_a, color_b = random.sample(colors_list, 2)
-                    alternating_style = True
-                # устанавливаем цвет фона в зависимости от чётности строки
+            # Применяем выбранный стиль
+            shading_elm = OxmlElement('w:shd')
+            shading_elm.set(qn('w:val'), 'clear')
+            shading_elm.set(qn('w:color'), 'auto')
+
+            if table_style_option == 'white':
+                shading_elm.set(qn('w:fill'), 'FFFFFF')
+            elif table_style_option == 'single_color':
+                shading_elm.set(qn('w:fill'), single_color)
+            elif table_style_option == 'alternating_color':
                 row_color = color_a if row_idx % 2 == 0 else color_b
-                shading_elm = OxmlElement('w:shd')
-                shading_elm.set(qn('w:val'), 'clear')
-                shading_elm.set(qn('w:color'), 'auto')
                 shading_elm.set(qn('w:fill'), row_color)
-                cell._tc.get_or_add_tcPr().append(shading_elm)
-                # добавляем случайный текст
-                cell.text = fake.text(max_nb_chars=random.randint(5, 50)) if random.choice([True, False]) else str(fake.random_number(digits=5))
-            else:
-                if table_style_option == 'random':
-                    if random.choice([True, False]):
-                        fill_color = random.choice(colors_list)
-                        shading_elm = OxmlElement('w:shd')
-                        shading_elm.set(qn('w:val'), 'clear')
-                        shading_elm.set(qn('w:color'), 'auto')
-                        shading_elm.set(qn('w:fill'), fill_color)
-                        cell._tc.get_or_add_tcPr().append(shading_elm)
-                elif table_style_option == 'single_color':
-                    single_color = random.choice(colors_list)
-                    shading_elm = OxmlElement('w:shd')
-                    shading_elm.set(qn('w:val'), 'clear')
-                    shading_elm.set(qn('w:color'), 'auto')
-                    shading_elm.set(qn('w:fill'), single_color)
-                    cell._tc.get_or_add_tcPr().append(shading_elm)
+            else:  # random
+                fill_color = random.choice([c for c in colors_list if c != 'FFFFFF'])
+                shading_elm.set(qn('w:fill'), fill_color)
 
-                # добавляем случайный текст
-                cell.text = fake.text(max_nb_chars=random.randint(5, 50)) if random.choice([True, False]) else str(fake.random_number(digits=5))
+            cell._tc.get_or_add_tcPr().append(shading_elm)
 
-                # настройка выравнивания текста в ячейках
-                cell_paragraph = cell.paragraphs[0]
-                cell_paragraph.alignment = random.choice([
-                    WD_ALIGN_PARAGRAPH.LEFT,
-                    WD_ALIGN_PARAGRAPH.CENTER,
-                    WD_ALIGN_PARAGRAPH.RIGHT,
-                    WD_ALIGN_PARAGRAPH.JUSTIFY
-                ])
+            # добавляем случайный текст
+            cell.text = fake.text(max_nb_chars=random.randint(5, 50)) if random.choice([True, False]) else str(fake.random_number(digits=5))
 
-                # настройка шрифта
-                if cell_paragraph.runs:
-                    run = cell_paragraph.runs[0]
-                    run.font.size = Pt(random.randint(8, 12))
+            # настройка выравнивания текста в ячейках
+            cell_paragraph = cell.paragraphs[0]
+            cell_paragraph.alignment = random.choice([
+                WD_ALIGN_PARAGRAPH.LEFT,
+                WD_ALIGN_PARAGRAPH.CENTER,
+                WD_ALIGN_PARAGRAPH.RIGHT,
+                WD_ALIGN_PARAGRAPH.JUSTIFY
+            ])
+
+            # настройка шрифта
+            if cell_paragraph.runs:
+                run = cell_paragraph.runs[0]
+                run.font.size = Pt(random.randint(8, 12))
+
+    table._element.getparent().spacing_before = Pt(random.randint(4, 12))
+    table._element.getparent().spacing_after = Pt(random.randint(4, 12))
 
     if not caption_before:
         add_table_caption(document, before=False)
-
-    # увеличиваем счётчик элементов в многоколонной секции
-    if doc_state.in_multicol:
-        doc_state.elements_in_multicol += 1
-        if doc_state.elements_in_multicol >= doc_state.max_elements_multicol:
-            doc_state.end_multicolumn()
 
 def add_footnote(paragraph, text, footnote_number):
     """Добавляет сноску в абзац."""
@@ -229,18 +332,62 @@ def add_footnote(paragraph, text, footnote_number):
     paragraph.add_run(f" {text}")
 
 def add_document_end_footnotes(document, end_footnotes):
-    """Добавляет список концевых сносок в конце документа."""
+    """Добавляет список концевых сносок в конце документа на новой странице с портретной ориентацией."""
     if not end_footnotes:
         return
-    # добавляем раздел перед концевыми сносками для одноколоночного режима
-    document.add_section(WD_SECTION_START.NEW_PAGE)
+
+    # добавляем пустой параграф перед новой секцией для гарантии разрыва
+    last_p = document.add_paragraph()
+    last_p.runs.clear()  
+    
+    # добавляем явный разрыв страницы
+    run = last_p.add_run()
+    run.add_break(WD_BREAK.PAGE)
+
+    # добавляем раздел перед концевыми сносками
+    new_section = document.add_section(WD_SECTION_START.NEW_PAGE)
+    
+    # разрываем связь с предыдущей секцией
+    new_section.start_type = WD_SECTION_START.NEW_PAGE
+    new_section.link_to_previous = False
+
+    # сброс параметров страницы к стандартным значениям (A4 портретная)
+    new_section.page_width = Mm(210)  # ширина A4
+    new_section.page_height = Mm(297)  # высота A4
+    new_section.orientation = WD_ORIENT.PORTRAIT
+
+    # устанавливаем отступы страницы
+    new_section.left_margin = Mm(25.4)
+    new_section.right_margin = Mm(25.4)
+    new_section.top_margin = Mm(25.4)
+    new_section.bottom_margin = Mm(25.4)
+
+    # дополнительно вызываем функцию установки ориентации
+    set_section_orientation(new_section, WD_ORIENT.PORTRAIT)
+
+    # добавляем заголовок "Концевые сноски"
     p = document.add_paragraph("Концевые сноски", style='Heading 2')
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p.runs[0].font.size = Pt(random.randint(14, 18))
-    p.runs[0].font.bold = True
+    p.paragraph_format.space_after = Pt(12)
+    p.paragraph_format.space_before = Pt(0)
+    
+    if p.runs:
+        p.runs[0].font.size = Pt(random.randint(14, 18))
+        p.runs[0].font.bold = True
+        
+        # случайный выбор цвета: голубой Word (Accent 1) или черный
+        if random.choice([True, False]):
+            p.runs[0].font.color.theme_color = MSO_THEME_COLOR_INDEX.ACCENT_1
+        else:
+            p.runs[0].font.color.rgb = RGBColor(0, 0, 0)
+
+    # добавляем сами сноски
     for idx, footnote in enumerate(end_footnotes, 1):
         p = document.add_paragraph(f"{idx}. {footnote}", style='Normal')
-        p.runs[0].font.size = Pt(random.randint(10, 14))
+        p.paragraph_format.space_before = Pt(random.randint(0, 2))
+        p.paragraph_format.space_after = Pt(random.randint(0, 2))
+        if p.runs:
+            p.runs[0].font.size = Pt(random.randint(10, 14))
         p.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
 def add_image(document, doc_state):
@@ -342,13 +489,22 @@ def make_run_keep_with_next(run):
 def add_heading(document, level=2):
     """Добавляет заголовок заданного уровня в документ."""
     heading_text = fake.sentence(nb_words=6)
-    p = document.add_heading(level=level)  
-    run = p.add_run(heading_text) 
+    p = document.add_heading(level=level)
+    run = p.add_run(heading_text)
     run.font.size = Pt(random.randint(14 + (level - 1) * 2, 20 + (level - 1) * 2))
+    
+    # выбор цвета для текста: стандартный голубоватый или черный
+    color_choice = random.choice(['standard_blue', 'almost_black'])
+    if color_choice == 'standard_blue':
+        run.font.color.rgb = RGBColor(0, 112, 192)  # стандартный голубоватый цвет
+    else:
+        run.font.color.rgb = RGBColor(0, 0, 0)  # черный 
+
     if random.choice([True, False]):
         run.bold = True
     if random.choice([True, False]):
         run.italic = True
+    
     heading_alignment = random.choice([
         WD_ALIGN_PARAGRAPH.LEFT,
         WD_ALIGN_PARAGRAPH.CENTER,
@@ -357,15 +513,8 @@ def add_heading(document, level=2):
     p.paragraph_format.space_before = Pt(12)
     p.alignment = heading_alignment
 
-def add_heading_to_cell(cell, level=2):
-    """Добавляет заголовок заданного уровня в указанную ячейку таблицы."""
-    p = cell.add_paragraph(style=f'Heading {level}')
-    p.text = fake.sentence(nb_words=6)
-    p.alignment = random.choice([
-        WD_ALIGN_PARAGRAPH.LEFT,
-        WD_ALIGN_PARAGRAPH.CENTER,
-        WD_ALIGN_PARAGRAPH.RIGHT
-    ])
+    make_paragraph_keep_together(p)
+    make_run_keep_with_next(run)
 
 def add_text(document, doc_state, text, font_size=12, alignment=WD_ALIGN_PARAGRAPH.LEFT):
     """Добавляет абзац текста в документ с заданным форматированием."""
@@ -383,8 +532,12 @@ def add_text(document, doc_state, text, font_size=12, alignment=WD_ALIGN_PARAGRA
     # разнообразие межстрочного интервала
     p.paragraph_format.space_after = Pt(random.randint(6, 12))
 
+    p.space_after = Pt(random.randint(4, 12))
+    p.space_before = Pt(random.randint(0, 2))
+
     # предотвращаем разрыв страницы внутри абзаца
     make_paragraph_keep_together(p)
+    make_run_keep_with_next(run)
 
 def add_text_to_cell(cell, text, font_size=12, alignment=WD_ALIGN_PARAGRAPH.LEFT):
     """Добавляет абзац текста в указанную ячейку таблицы с заданным форматированием."""
@@ -404,6 +557,7 @@ def add_text_to_cell(cell, text, font_size=12, alignment=WD_ALIGN_PARAGRAPH.LEFT
 
     # предотвращаем разрыв страницы внутри абзаца
     make_paragraph_keep_together(p)
+    make_run_keep_with_next(run)
 
 def add_footnote_to_cell(cell, text, footnote_number):
     """Добавляет сноску к элементу в ячейке таблицы."""
@@ -413,64 +567,40 @@ def add_footnote_to_cell(cell, text, footnote_number):
     run.font.size = Pt(8)
     p.add_run(f" {text}")
 
-def add_bulleted_list_to_cell(cell, num_items=5):
-    """Добавляет маркированный список в указанную ячейку таблицы."""
-    for _ in range(num_items):
-        p = cell.add_paragraph(fake.sentence(nb_words=6), style='List Bullet')
-        p.alignment = random.choice([
-            WD_ALIGN_PARAGRAPH.LEFT,
-            WD_ALIGN_PARAGRAPH.JUSTIFY
-        ])
-        p.runs[0].font.size = Pt(random.randint(10, 14))
-        p.paragraph_format.left_indent = Cm(0.75)
-        p.paragraph_format.space_after = Pt(6)
-
-def add_formula_to_cell(cell, generated_formulas):
-    """Добавляет формулу в указанную ячейку таблицы."""
-    formula = generate_complex_formula(generated_formulas)
-    if not formula:
-        return
-    try:
-        math2docx.add_math(cell.add_paragraph(), formula)
-    except Exception:
-        pass  # ничего не добавляем
-
 def add_numbered_list(document, num_items=5):
     """Добавляет нумерованный список в документ."""
     for _ in range(num_items):
-        p = document.add_paragraph(fake.sentence(nb_words=6), style='List Number')
-        p.alignment = random.choice([
-            WD_ALIGN_PARAGRAPH.LEFT,
-            WD_ALIGN_PARAGRAPH.JUSTIFY
-        ])
+        sentence = fake.sentence(nb_words=6)[:50]  
+        p = document.add_paragraph(sentence, style='List Number')
+        
+        # устанавливаем выравнивание и форматирование
+        p.alignment = random.choice([WD_ALIGN_PARAGRAPH.LEFT, WD_ALIGN_PARAGRAPH.JUSTIFY])
         p.runs[0].font.size = Pt(random.randint(10, 14))
+        
         p.paragraph_format.left_indent = Cm(0.75)
-        p.paragraph_format.space_after = Pt(6)
+        p.paragraph_format.space_after = Pt(0) 
+        p.paragraph_format.line_spacing = Pt(12)  
+        p.paragraph_format.space_before = Pt(0)  
 
-def add_numbered_list_to_cell(cell, num_items=5):
-    """Добавляет нумерованный список в указанную ячейку таблицы."""
-    for _ in range(num_items):
-        p = cell.add_paragraph(fake.sentence(nb_words=6), style='List Number')
-        p.alignment = random.choice([
-            WD_ALIGN_PARAGRAPH.LEFT,
-            WD_ALIGN_PARAGRAPH.JUSTIFY
-        ])
-        p.runs[0].font.size = Pt(random.randint(10, 14))
-        p.paragraph_format.left_indent = Cm(0.75)
-        p.paragraph_format.space_after = Pt(6)
-
+    make_paragraph_keep_together(p)
+    document.add_paragraph("")
 
 def add_bulleted_list(document, num_items=5):
     """Добавляет маркированный список в документ."""
     for _ in range(num_items):
-        p = document.add_paragraph(fake.sentence(nb_words=6), style='List Bullet')
-        p.alignment = random.choice([
-            WD_ALIGN_PARAGRAPH.LEFT,
-            WD_ALIGN_PARAGRAPH.JUSTIFY
-        ])
+        sentence = fake.sentence(nb_words=6)[:50]  
+        p = document.add_paragraph(sentence, style='List Bullet')
+
+        p.alignment = random.choice([WD_ALIGN_PARAGRAPH.LEFT, WD_ALIGN_PARAGRAPH.JUSTIFY])
         p.runs[0].font.size = Pt(random.randint(10, 14))
+
         p.paragraph_format.left_indent = Cm(0.75)
-        p.paragraph_format.space_after = Pt(6)
+        p.paragraph_format.space_after = Pt(0)  
+        p.paragraph_format.line_spacing = Pt(12)  
+        p.paragraph_format.space_before = Pt(0) 
+
+    make_paragraph_keep_together(p)
+    document.add_paragraph("")
 
 def add_formula(document, generated_formulas):
     """Добавляет сгенерированную формулу как Office Math объект в документ."""
@@ -479,6 +609,8 @@ def add_formula(document, generated_formulas):
         return
     latex_formula = formula
     paragraph = document.add_paragraph()
+    paragraph.space_after = Pt(random.randint(4, 12))
+    paragraph.space_before = Pt(random.randint(4, 12))
     try:
         math2docx.add_math(paragraph, latex_formula)
         paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
@@ -636,22 +768,38 @@ def generate_random_plot_image(doc_state):
     return image_path
 
 def add_header_footer(document, header_text=None, footer_text=None):
-    """Добавляет текст в колонтитулы документа."""
+    """Добавляет текст в колонтитулы документа с заданной вероятностью."""
     section = document.sections[0]
-    header = section.header
-    footer = section.footer
-
-    if header_text:
-        header_para = header.paragraphs[0]
+    
+    # добавление header с вероятностью 50%
+    if random.random() < 0.5 and header_text:
+        header = section.header
+        if not header.paragraphs:
+            header_para = header.add_paragraph()
+        else:
+            header_para = header.paragraphs[0]
         header_para.text = header_text
         header_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        header_para.runs[0].font.size = Pt(12)
+        if header_para.runs:
+            header_para.runs[0].font.size = Pt(12)
+        else:
+            run = header_para.add_run(header_text)
+            run.font.size = Pt(12)
 
-    if footer_text:
-        footer_para = footer.paragraphs[0]
+    # добавление footer с вероятностью 70%
+    if random.random() < 0.7 and footer_text:
+        footer = section.footer
+        if not footer.paragraphs:
+            footer_para = footer.add_paragraph()
+        else:
+            footer_para = footer.paragraphs[0]
         footer_para.text = footer_text
         footer_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        footer_para.runs[0].font.size = Pt(12)
+        if footer_para.runs:
+            footer_para.runs[0].font.size = Pt(12)
+        else:
+            run = footer_para.add_run(footer_text)
+            run.font.size = Pt(12)
 
 def get_table_styles(document):
     """Получает все стили таблиц в документе."""
@@ -676,175 +824,320 @@ def set_section_orientation(section, orientation=WD_ORIENT.PORTRAIT):
     section.page_width = new_width
     section.page_height = new_height
 
+def estimate_lines_and_fullness(text, line_width=80):
+    words = text.split()
+    current_line_length = 0
+    lines = []
+    current_line = []
+    
+    for word in words:
+        # +1 для пробела между словами
+        if current_line_length + len(word) + (1 if current_line else 0) <= line_width:
+            current_line.append(word)
+            current_line_length += len(word) + (1 if current_line_length > 0 else 0)
+        else:
+            lines.append((current_line, current_line_length))
+            current_line = [word]
+            current_line_length = len(word)
+    
+    if current_line:
+        lines.append((current_line, current_line_length))
+    
+    # подсчитываем количество полных строк (заполненность более 80%)
+    full_lines = sum(1 for _, length in lines if length >= line_width * 0.8)
+    
+    return len(lines), full_lines
+
+def is_suitable_for_justify(text, line_width=80):
+    words = text.split()
+    word_count = len(words)
+    avg_word_length = sum(len(word) for word in words) / word_count if word_count > 0 else 0
+    
+    # базовые критерии
+    min_words_per_line = 5
+    min_avg_word_length = 4
+    
+    # проверяем количество строк и их заполненность
+    total_lines, full_lines = estimate_lines_and_fullness(text, line_width)
+    
+    # примерное количество слов в строке
+    words_per_line = word_count / total_lines if total_lines > 0 else 0
+    
+    return (words_per_line >= min_words_per_line and 
+            avg_word_length >= min_avg_word_length and 
+            word_count >= 15 and  # минимальное общее количество слов
+            total_lines >= 3 and  # минимум 3 строки
+            full_lines >= 2)      # минимум 2 полные строки
+
 def add_random_elements(document, doc_state, end_footnotes, generated_formulas, last_element=None):
     """Добавляет случайные элементы в документ в зависимости от текущего состояния колонки."""
-    # определяем возможные элементы
-    elements = ['heading', 'text', 'list', 'formula', 'footnote']
-    if not doc_state.in_multicol:
-        elements.extend(['image', 'table'])
-
-    # настройки вероятностей появления элементов
-    element_weights = {
-        'heading': 15,
-        'text': 40,
-        'list': 10,
-        'formula': 15,
-        'image': 5,
-        'table': 5,
-        'footnote': 15
-    }
-
-    # исключаем элемент, если последний был таким же, чтобы избежать повторений
-    if last_element:
-        elements = [elem for elem in elements if elem != last_element]
-        weights = [element_weights[elem] for elem in elements]
-    else:
-        weights = [element_weights[elem] for elem in elements]
-
-    element_type = random.choices(elements, weights=weights, k=1)[0]
-
-    # добавляем выбранный элемент
-    if element_type == 'heading':
-        level = random.choice([2, 3])
-        if doc_state.in_multicol:
-            current_cell = doc_state.get_current_multicol_cell()
-            if current_cell:
-                add_heading_to_cell(current_cell, level=level)
+    try:
+        # определяем доступные элементы
+        if doc_state.in_multicol and any(count == 0 for count in doc_state.column_elements):
+            elements = ['text', 'footnote']
+            element_weights = {
+                'text': 80,
+                'footnote': 20
+            }
         else:
-            add_heading(document, level=level)
-    elif element_type == 'text':
-        text = fake.paragraph(nb_sentences=random.randint(3, 8))
-        font_size = random.randint(10, 14)
-        alignment = random.choice([
-            WD_ALIGN_PARAGRAPH.LEFT,
-            WD_ALIGN_PARAGRAPH.CENTER,
-            WD_ALIGN_PARAGRAPH.RIGHT,
-            WD_ALIGN_PARAGRAPH.JUSTIFY
-        ])
-        if doc_state.in_multicol:
-            current_cell = doc_state.get_current_multicol_cell()
-            if current_cell:
-                add_text_to_cell(current_cell, text, font_size, alignment)
+            elements = ['heading', 'text', 'list', 'formula', 'footnote']
+            if not doc_state.in_multicol:
+                elements.extend(['image', 'table'])
+            
+            element_weights = {
+                'heading': 10,
+                'text': 65,
+                'list': 10,
+                'formula': 15,
+                'image': 5,
+                'table': 5,
+                'footnote': 3
+            }
+
+        # исключаем элемент, если последний был таким же
+        if last_element:
+            elements = [elem for elem in elements if elem != last_element]
+            weights = [element_weights[elem] for elem in elements]
         else:
-            add_text(document, doc_state, text, font_size, alignment)
-    elif element_type == 'list':
-        list_type = random.choice(['numbered', 'bulleted'])
-        num_items = random.randint(3, 6)
-        if doc_state.in_multicol:
-            current_cell = doc_state.get_current_multicol_cell()
-            if current_cell:
-                if list_type == 'numbered':
-                    add_numbered_list_to_cell(current_cell, num_items)
+            weights = [element_weights[elem] for elem in elements]
+
+        element_type = random.choices(elements, weights=weights, k=1)[0]
+
+        # добавляем выбранный элемент
+        if element_type == 'heading' and not doc_state.in_multicol:
+            try:
+                level = random.choice([2, 3])
+                heading_text = fake.sentence()
+                p = document.add_heading(heading_text, level=level)
+                if p:
+                    p.paragraph_format.space_after = Pt(random.randint(4, 8))
+                    p.paragraph_format.space_before = Pt(random.randint(9, 15))
+                    p.paragraph_format.keep_with_next = True
+            except Exception:
+                print("Ошибка при добавлении заголовка")
+
+        elif element_type == 'text':
+            try:
+                max_attempts = 10
+                for _ in range(max_attempts):
+                    text = fake.paragraph(nb_sentences=random.randint(3, 8))
+                    suitable_for_justify = is_suitable_for_justify(text)
+                    if suitable_for_justify or _ == max_attempts - 1:
+                        break
+
+                font_size = random.randint(10, 14)
+                available_alignments = [
+                    WD_ALIGN_PARAGRAPH.LEFT,
+                    WD_ALIGN_PARAGRAPH.CENTER,
+                    WD_ALIGN_PARAGRAPH.RIGHT
+                ]
+                if suitable_for_justify:
+                    available_alignments.append(WD_ALIGN_PARAGRAPH.JUSTIFY)
+                
+                alignment = random.choice(available_alignments)
+
+                if doc_state.in_multicol:
+                    current_cell = doc_state.get_current_multicol_cell()
+                    if current_cell:
+                        p = add_text_to_cell(current_cell, text, font_size, alignment)
+                        if p:
+                            p.paragraph_format.space_after = Pt(random.randint(4, 8))
                 else:
-                    add_bulleted_list_to_cell(current_cell, num_items)
-        else:
-            if list_type == 'numbered':
-                add_numbered_list(document, num_items)
-            else:
-                add_bulleted_list(document, num_items)
-    elif element_type == 'formula':
-        if doc_state.in_multicol:
-            current_cell = doc_state.get_current_multicol_cell()
-            if current_cell:
-                add_formula_to_cell(current_cell, generated_formulas)
-        else:
-            add_formula(document, generated_formulas)
-    elif element_type == 'footnote':
-        footnote_text = fake.sentence(nb_words=10)
-        if doc_state.in_multicol:
-            current_cell = doc_state.get_current_multicol_cell()
-            if current_cell:
-                add_footnote_to_cell(current_cell, footnote_text, len(end_footnotes) + 1)
-        else:
-            p = document.add_paragraph()
-            add_footnote(p, footnote_text, len(end_footnotes) + 1)
-        end_footnotes.append(footnote_text)
-    elif element_type == 'image' and not doc_state.in_multicol:
-        add_image(document, doc_state)
-    elif element_type == 'table' and not doc_state.in_multicol:
-        add_table(document, doc_state)
-    
+                    p = add_text(document, doc_state, text, font_size, alignment)
+                    if p:
+                        p.paragraph_format.space_after = Pt(random.randint(4, 8))
+            except Exception:
+                print("Ошибка при добавлении текста")
 
-    return element_type  # возвращаем тип последнего добавленного элемента
-    
+        elif element_type == 'list' and not doc_state.in_multicol:
+            try:
+                list_type = random.choice(['numbered', 'bulleted'])
+                num_items = random.randint(3, 6)
+                if list_type == 'numbered':
+                    p = add_numbered_list(document, num_items)
+                else:
+                    p = add_bulleted_list(document, num_items)
+                if p:
+                    p.paragraph_format.space_after = Pt(random.randint(4, 8))
+                    p.paragraph_format.space_before = Pt(random.randint(4, 8))
+            except Exception:
+                print("Ошибка при добавлении списка")
+
+        elif element_type == 'formula' and not doc_state.in_multicol:
+            try:
+                p = add_formula(document, generated_formulas)
+                if p:
+                    p.paragraph_format.space_after = Pt(random.randint(4, 8))
+                    p.paragraph_format.space_before = Pt(random.randint(4, 8))
+            except Exception:
+                print("Ошибка при добавлении формулы")
+
+        elif element_type == 'footnote':
+            try:
+                footnote_text = fake.sentence(nb_words=10)
+                if doc_state.in_multicol:
+                    current_cell = doc_state.get_current_multicol_cell()
+                    if current_cell:
+                        p = add_footnote_to_cell(current_cell, footnote_text, len(end_footnotes) + 1)
+                        if p:
+                            p.paragraph_format.space_after = Pt(random.randint(4, 8))
+                else:
+                    p = document.add_paragraph()
+                    if p:
+                        p.paragraph_format.space_after = Pt(random.randint(4, 8))
+                        add_footnote(p, footnote_text, len(end_footnotes) + 1)
+                end_footnotes.append(footnote_text)
+            except Exception:
+                print("Ошибка при добавлении сноски")
+
+        elif element_type == 'image' and not doc_state.in_multicol:
+            try:
+                p = add_image(document, doc_state)
+                if p:
+                    p.paragraph_format.space_after = Pt(random.randint(4, 8))
+                    p.paragraph_format.space_before = Pt(random.randint(4, 8))
+            except Exception:
+                print("Ошибка при добавлении изображения")
+
+        elif element_type == 'table' and not doc_state.in_multicol:
+            try:
+                p = add_table(document, doc_state)
+                if p:
+                    p.paragraph_format.space_after = Pt(random.randint(4, 8))
+                    p.paragraph_format.space_before = Pt(random.randint(4, 8))
+            except Exception:
+                print("Ошибка при добавлении таблицы")
+
+        return element_type
+
+    except Exception as e:
+        print(f"Общая ошибка в add_random_elements: {e}")
+        return None
+
 def generate_document(doc_id, output_dir, num_iterations=100):
     """Генерирует один документ с заданным количеством итераций добавления элементов."""
-    document = Document()
-    doc_state = DocumentState(document)
-
-    # устанавливаем ориентацию первой секции
-    set_section_orientation(document.sections[-1], WD_ORIENT.PORTRAIT)
-
-    # добавление колонтитулов
-    header_text = fake.sentence(nb_words=4)
-    footer_text = fake.sentence(nb_words=4)
-    add_header_footer(document, header_text=header_text, footer_text=footer_text)
-
-    generated_formulas = set()
-    end_footnotes = [] 
-    last_element = None 
-
-    # начальная контент (одноколоночный)
-    for _ in range(10):
-        last_element = add_random_elements(document, doc_state, end_footnotes, generated_formulas, last_element)
-
-    # основной цикл генерации контента
-    for _ in range(num_iterations - 10):
-        # решаем, вставлять ли новую секцию с возможным изменением ориентации
-        if random.random() < 0.2:  # 20% шанс изменить ориентацию
-            # выбираем ориентацию: 25% альбомная, 75% книжная
-            orientation = WD_ORIENT.LANDSCAPE if random.random() < 0.25 else WD_ORIENT.PORTRAIT
-            # добавляем новую секцию
-            section = document.add_section(WD_SECTION_START.CONTINUOUS)
-            set_section_orientation(section, orientation)
-            doc_state.current_orientation = orientation
-
-        # решаем, вставлять ли многоколонную секцию
-        if doc_state.can_start_multicolumn() and not doc_state.in_multicol:
-            if random.random() < 0.1:  # 10% шанс начать многоколонную секцию
-                # выбираем тип колонок
-                possible_cols = []
-                if doc_state.can_add_multicolumn(2):
-                    possible_cols.append(2)
-                if doc_state.can_add_multicolumn(3):
-                    possible_cols.append(3)
-                if possible_cols:
-                    num_cols = random.choice(possible_cols)
-                    started = doc_state.start_multicolumn(num_cols)
-                    if started:
-                        # добавляем контент в многоколонную секцию
-                        for _ in range(random.randint(5, 10)):
-                            last_element = add_random_elements(document, doc_state, end_footnotes, generated_formulas, last_element)
-                        # прерываем многоколонную секцию
-                        doc_state.end_multicolumn()
-                        continue
-
-        # добавляем обычные элементы
-        last_element = add_random_elements(document, doc_state, end_footnotes, generated_formulas, last_element)
-
-    # проверка, чтобы документ не заканчивался многоколонной секцией
-    if doc_state.in_multicol:
-        doc_state.end_multicolumn()
-
-    # добавляем концевые сноски
-    add_document_end_footnotes(document, end_footnotes)
-
-    # сохранение документа
-    output_path = os.path.join(output_dir, f'demo_{doc_id}.docx')
     try:
-        document.save(output_path)
-    except Exception as e:
-        print(f"Ошибка при сохранении документа: {e}")
+        document = Document()
+        doc_state = DocumentState(document)
 
+        # настройка базового стиля
+        style = document.styles['Normal']
+        style.paragraph_format.space_after = Pt(random.randint(4, 8))
+        style.paragraph_format.space_before = Pt(random.randint(0, 2))
+
+        # настройка стилей заголовков
+        for i in range(1, 4):
+            heading_style = document.styles[f'Heading {i}']
+            heading_style.paragraph_format.space_after = Pt(random.randint(4, 8))
+            heading_style.paragraph_format.space_before = Pt(random.randint(10, 14))
+            heading_style.paragraph_format.keep_with_next = True
+
+        # устанавливаем ориентацию первой секции
+        set_section_orientation(document.sections[-1], WD_ORIENT.PORTRAIT)
+
+        # добавление колонтитулов
+        header_text = fake.sentence(nb_words=4)
+        footer_text = fake.sentence(nb_words=4)
+        add_header_footer(document, header_text=header_text, footer_text=footer_text)
+
+        generated_formulas = set()
+        end_footnotes = []
+        last_element = None
+
+        # начальный контент (одноколоночный)
+        for _ in range(10):
+            last_element = add_random_elements(document, doc_state, end_footnotes, generated_formulas, last_element)
+
+        # основной цикл генерации контента
+        for _ in range(num_iterations - 10):
+            # отключаем разрыв страницы для текущего параграфа
+            if document.paragraphs:
+                current_paragraph = document.paragraphs[-1]
+                if current_paragraph:
+                    current_paragraph.paragraph_format.page_break_before = False
+
+            if random.random() < 0.2:  # 20% шанс изменить ориентацию
+                orientation = WD_ORIENT.LANDSCAPE if random.random() < 0.25 else WD_ORIENT.PORTRAIT
+                section = document.add_section(WD_SECTION_START.CONTINUOUS)
+                set_section_orientation(section, orientation)
+                doc_state.current_orientation = orientation
+
+            if doc_state.can_start_multicolumn() and not doc_state.in_multicol:
+                if random.random() < 0.15:  # 15% шанс начать многоколонную секцию
+                    possible_cols = []
+                    if doc_state.can_add_multicolumn(2):
+                        possible_cols.append(2)
+                    if doc_state.can_add_multicolumn(3):
+                        possible_cols.append(3)
+
+                    if possible_cols:
+                        num_cols = random.choice(possible_cols)
+                        started = doc_state.start_multicolumn(num_cols)
+                        
+                        if started:
+                            elements_per_col = doc_state.min_elements_per_column
+                            total_elements = num_cols * elements_per_col
+
+                            for _ in range(total_elements):
+                                if random.random() < 0.8:  # 80% шанс для текста
+                                    element_type = 'text'
+                                else:  # 20% шанс для сноски
+                                    element_type = 'footnote'
+
+                                if element_type == 'text':
+                                    text = fake.paragraph(nb_sentences=random.randint(3, 8))
+                                    font_size = random.randint(10, 14)
+                                    current_cell = doc_state.get_current_multicol_cell()
+                                    if current_cell:
+                                        p = add_text_to_cell(current_cell, text, font_size)
+                                        if p:
+                                            p.paragraph_format.space_after = Pt(random.randint(4, 8))
+                                else:
+                                    footnote_text = fake.sentence(nb_words=10)
+                                    current_cell = doc_state.get_current_multicol_cell()
+                                    if current_cell:
+                                        p = add_footnote_to_cell(current_cell, footnote_text, len(end_footnotes) + 1)
+                                        if p:
+                                            p.paragraph_format.space_after = Pt(random.randint(4, 8))
+                                        end_footnotes.append(footnote_text)
+
+                                doc_state.elements_in_multicol += 1
+
+                            doc_state.end_multicolumn()
+                            continue
+
+            # добавляем обычные элементы
+            last_element = add_random_elements(document, doc_state, end_footnotes, generated_formulas, last_element)
+
+        # проверка, чтобы документ не заканчивался многоколонной секцией
+        if doc_state.in_multicol:
+            doc_state.end_multicolumn()
+
+        # добавляем концевые сноски
+        if end_footnotes:
+            if document.paragraphs:
+                last_paragraph = document.paragraphs[-1]
+                if last_paragraph:
+                    last_paragraph.paragraph_format.page_break_before = False
+            add_document_end_footnotes(document, end_footnotes)
+
+        # cохранение документа
+        output_path = os.path.join(output_dir, f'demo_{doc_id}.docx')
+        document.save(output_path)
+        return True
+
+    except Exception as e:
+        print(f"Ошибка при генерации документа {doc_id}: {e}")
+        return False
 
 def main():
     output_dir = './data/docx'
     os.makedirs(output_dir, exist_ok=True)
-    num_docs = 3  # размер выборки, потом увеличим до 10000
+    num_docs = 5  # размер выборки, потом увеличим до 3000
     for doc_id in range(num_docs):
         # гарантируем, что многоколонные секции не будут на первой и последней страницах
         generate_document(doc_id, output_dir)
-        if (doc_id + 1) % 100 == 0:
+        if (doc_id + 1) % 10 == 0:
             print(f'Создано {doc_id + 1} документов')
 
 if __name__ == "__main__":

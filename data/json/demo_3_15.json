@@ -1,0 +1,31 @@
+{
+    "image_path": "./data/image/demo_3_15.png",
+    "image_height": 792.0,
+    "image_width": 612.0,
+    "table": [],
+    "title": [],
+    "paragraph": [
+        [
+            102.73999786376953,
+            71.877685546875,
+            509.2408447265625,
+            118.48602294921875
+        ]
+    ],
+    "formula": [],
+    "header": [],
+    "footer": [
+        [
+            227.80999755859375,
+            741.9336547851562,
+            384.1828918457031,
+            756.0020141601562
+        ]
+    ],
+    "footnote": [],
+    "numbered_list": [],
+    "marked_list": [],
+    "table_signature": [],
+    "picture_signature": [],
+    "picture": []
+}
