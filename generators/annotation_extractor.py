@@ -4,7 +4,7 @@ import json
 from PIL import Image, ImageDraw, ImageFont
 import re
 
-VISUALISE = True
+VISUALISE = False
 PDF_DIR = './data/pdf'
 IMAGE_DIR = './data/image'
 VISUAL_DIR = './data/visualizations'
@@ -73,6 +73,44 @@ def are_bboxes_close(bbox1, bbox2, threshold_x=5, threshold_y=2, overlap_thresho
     # либо находятся достаточно близко друг к другу по обеим осям
     return check_overlap(bbox1, bbox2, threshold=overlap_threshold) or (check_horizontal_proximity() and check_vertical_proximity())
 
+def scale_coordinates(coords, orig_width, orig_height, target_width, target_height):
+    """
+    Масштабирует координаты из исходного размера в целевой размер.
+    """
+    x0, y0, x1, y1 = coords
+    scale_x = target_width / orig_width
+    scale_y = target_height / orig_height
+    return [
+        int(x0 * scale_x),
+        int(y0 * scale_y),
+        int(x1 * scale_x),
+        int(y1 * scale_y)
+    ]
+
+def scale_elements(elements, target_width, target_height):
+    """
+    Масштабирует все координаты элементов документа.
+    """
+    scaled_elements = elements.copy()
+    orig_width = elements.get("image_width", target_width)
+    orig_height = elements.get("image_height", target_height)
+
+    for key, boxes in elements.items():
+        if key in ["image_path", "image_height", "image_width"]:
+            continue
+            
+        scaled_elements[key] = [
+            scale_coordinates(box, orig_width, orig_height, target_width, target_height)
+            for box in boxes
+            if isinstance(box, list) and len(box) == 4
+        ]
+    
+    # обновляем размеры изображения в scaled_elements
+    scaled_elements["image_width"] = target_width
+    scaled_elements["image_height"] = target_height
+    
+    return scaled_elements
+
 def visualize_elements(image_path, elements, output_path, page_width, page_height):
     # создаем новое изображение с размерами страницы
     img = Image.new("RGBA", (page_width, page_height), (255, 255, 255, 0))
@@ -105,33 +143,15 @@ def visualize_elements(image_path, elements, output_path, page_width, page_heigh
         "formula": (0, 0, 128, 80)
     }
 
-    # масштабируем координаты в соответствии с размерами страницы
-    def scale_coordinates(coords, orig_width, orig_height):
-        x0, y0, x1, y1 = coords
-        scale_x = page_width / orig_width
-        scale_y = page_height / orig_height
-        return [
-            int(x0 * scale_x),
-            int(y0 * scale_y),
-            int(x1 * scale_x),
-            int(y1 * scale_y)
-        ]
-
     for key, boxes in elements.items():
         if key in ["image_path", "image_height", "image_width"]:
             continue
-            
-        orig_width = elements.get("image_width", page_width)
-        orig_height = elements.get("image_height", page_height)
 
         for box in boxes:
             if not isinstance(box, list) or len(box) != 4:
                 continue
 
-            # масштабируем координаты
-            scaled_box = scale_coordinates(box, orig_width, orig_height)
-            x0, y0, x1, y1 = scaled_box
-            
+            x0, y0, x1, y1 = box
             color = color_map.get(key, (255, 255, 255, 80))
             
             # создаем отдельный слой для каждого прямоугольника
@@ -146,7 +166,7 @@ def visualize_elements(image_path, elements, output_path, page_width, page_heigh
             
             # добавляем текст
             draw = ImageDraw.Draw(img)
-            text_color = (0, 0, 0, 255)  # черный цвет для текста
+            text_color = (0, 0, 0, 255) 
             draw.text((x0 + 5, y0 + 5), key, fill=text_color, font=font)
 
     img.save(output_path)
@@ -210,20 +230,25 @@ def merge_blocks(elements):
                     box1 = blocks_in_column[i]['coords']
                     box2 = blocks_in_column[j]['coords']
                     
-                    # Проверяем блоки между ними
+                    # проверяем блоки между ними
                     blocks_between = blocks_in_column[i+1:j]
                     has_other_blocks_between = any(
                         b['type'] != blocks_in_column[i]['type'] 
                         for b in blocks_between
                     )
                     
+                    if blocks_in_column[i]['type'] == 'paragraph':
+                        max_vertical_gap = 3
+                    else:
+                        max_vertical_gap = 15
+
                     should_merge = False
                     if not has_other_blocks_between:
                         if is_inside(box1, box2) or is_inside(box2, box1):
                             should_merge = True
                         elif do_overlap(box1, box2):
                             should_merge = True
-                        elif is_vertically_close(box1, box2):
+                        elif is_vertically_close(box1, box2, max_vertical_gap):
                             should_merge = True
                         elif is_horizontally_close(box1, box2, type_of_block):
                             should_merge = True
@@ -587,29 +612,35 @@ def process_pdf(pdf_path):
             print(f"Изображение не найдено: {image_path}, пропуск страницы.")
             continue
 
+        # получаем неотмасштабированные элементы
         elements = extract_elements(page, image_filename)
 
-        # сохранение JSON
+        # определяем целевые размеры
+        zoom = 300 / 72  
+        mat = fitz.Matrix(zoom, zoom)
+        pix = page.get_pixmap(matrix=mat)
+        target_width, target_height = pix.width, pix.height
+
+        # масштабируем элементы перед сохранением в JSON
+        scaled_elements = scale_elements(elements, target_width, target_height)
+
+        # сохранение JSON с отмасштабированными координатами
         json_filename = f"{pdf_name}_{page_num + 1}.json"
         json_path = os.path.join(JSON_DIR, json_filename)
         with open(json_path, 'w', encoding='utf-8') as f:
-            json.dump(elements, f, ensure_ascii=False, indent=4)
-
+            json.dump(scaled_elements, f, ensure_ascii=False, indent=4)
+        
         # визуализация
         if VISUALISE:
-            zoom = 300 / 72  
-            mat = fitz.Matrix(zoom, zoom)
-            pix = page.get_pixmap(matrix=mat)
-            
-            # создаем временный путь для базового изображения
             temp_image_path = os.path.join(IMAGE_DIR, f"{pdf_name}_{page_num + 1}_temp.png")
             pix.save(temp_image_path)
 
             visualization_filename = f"{pdf_name}_{page_num + 1}_vis.png"
             visualization_path = os.path.join(VISUAL_DIR, visualization_filename)
-            visualize_elements(temp_image_path, elements, visualization_path, pix.width, pix.height)
             
-            # удаляем временный файл
+            # используем уже отмасштабированные координаты для визуализации
+            visualize_elements(temp_image_path, scaled_elements, visualization_path, target_width, target_height)
+            
             os.remove(temp_image_path)
 
     doc.close()

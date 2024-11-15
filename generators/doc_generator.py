@@ -1133,7 +1133,7 @@ def generate_document(doc_id, output_dir, num_iterations=100):
 def main():
     output_dir = './data/docx'
     os.makedirs(output_dir, exist_ok=True)
-    num_docs = 5  # размер выборки, потом увеличим до 3000
+    num_docs = 3000
     for doc_id in range(num_docs):
         # гарантируем, что многоколонные секции не будут на первой и последней страницах
         generate_document(doc_id, output_dir)
