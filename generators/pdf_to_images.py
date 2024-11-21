@@ -20,6 +20,6 @@ def pdf_to_images(pdf_dir, img_dir, dpi=300):
                 print(f"Ошибка при обработке {filename}: {e}")
 
 if __name__ == "__main__":
-    pdf_dir = "C:/Users/ВИТАЛИЙ/Desktop/data/pdf"
-    img_dir = "C:/Users/ВИТАЛИЙ/Desktop/data/image"
+    pdf_dir = "./data/pdf"
+    img_dir = "./data/image"
     pdf_to_images(pdf_dir, img_dir)

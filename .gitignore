@@ -1,1 +1,4 @@
 *:Zone.Identifier
+data
+__pycache__
+*.pt
