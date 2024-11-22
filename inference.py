@@ -1,5 +1,6 @@
 import cv2
 import torch
+import json
 import numpy as np
 from pathlib import Path
 from doclayout_yolo import YOLOv10
@@ -34,11 +35,35 @@ def load_model(weights_path):
     model.to('cuda' if torch.cuda.is_available() else 'cpu')
     return model
 
-def predict_and_visualize(model, image_path, output_path, conf_threshold=0.25):
-    """Получение предсказаний и визуализация результатов"""
+def create_json_annotation(results, image_path, image_height, image_width):
+    """Создание JSON-аннотации из результатов предсказания"""
+    # инициализация структуры JSON
+    annotation = {
+        "image_height": image_height,
+        "image_width": image_width,
+        "image_path": str(image_path),
+    }
+    
+    # инициализация пустых списков для каждого класса
+    for class_name in class_names:
+        annotation[class_name] = []
+    
+    # заполнение списков координатами
+    for result in results:
+        boxes = result.boxes.cpu().numpy()
+        for box in boxes:
+            coords = box.xyxy[0].tolist()  # [x1, y1, x2, y2]
+            class_name = class_names[int(box.cls[0])]
+            annotation[class_name].append(coords)
+    
+    return annotation
+
+def predict_and_visualize(model, image_path, output_path, json_output_path, conf_threshold=0.25):
+    """Получение предсказаний, визуализация результатов и сохранение JSON"""
     # загрузка изображения
     image = cv2.imread(str(image_path))
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    height, width = image.shape[:2]
     
     # получение предсказаний
     results = model.predict(
@@ -48,11 +73,14 @@ def predict_and_visualize(model, image_path, output_path, conf_threshold=0.25):
         device='cuda' if torch.cuda.is_available() else 'cpu'
     )
     
+    # создание и сохранение JSON-аннотации
+    json_annotation = create_json_annotation(results, image_path, height, width)
+    with open(json_output_path, 'w', encoding='utf-8') as f:
+        json.dump(json_annotation, f, ensure_ascii=False, indent=4)
+    print(f"JSON-разметка сохранена в {json_output_path}")
+    
     # создаем копию изображения для рисования
     output_image = image.copy()
-    
-    # получаем размеры изображения
-    height, width = image.shape[:2]
     
     # создаем фигуру matplotlib
     plt.figure(figsize=(20, 20))
@@ -102,18 +130,20 @@ def predict_and_visualize(model, image_path, output_path, conf_threshold=0.25):
     )
     plt.close()
     
-    print(f"Результат сохранен в {output_path}")
+    print(f"Визуализация сохранена в {output_path}")
     return results
 
 def main():
     # пути к файлам и директориям
     project_root = Path.cwd()
-    weights_path = project_root / "runs/train/exp/weights/last.pt"
+    weights_path = project_root / "runs/train/experiment3/weights/best.pt"
     test_images_dir = project_root / "test_images"
     output_dir = project_root / "predictions"
+    json_output_dir = project_root / "predictions_json"
     
-    # создаем директорию для выходных файлов
+    # создаем директории для выходных файлов
     output_dir.mkdir(parents=True, exist_ok=True)
+    json_output_dir.mkdir(parents=True, exist_ok=True)
     
     # загружаем модель
     print("Загрузка модели...")
@@ -134,9 +164,10 @@ def main():
     for image_path in test_images:
         print(f"\nОбработка {image_path.name}...")
         output_path = output_dir / f"pred_{image_path.stem}.png"
+        json_output_path = json_output_dir / f"pred_{image_path.stem}.json"
         
         try:
-            results = predict_and_visualize(model, image_path, output_path)
+            results = predict_and_visualize(model, image_path, output_path, json_output_path)
             
             # выводим информацию о найденных объектах
             for result in results:
