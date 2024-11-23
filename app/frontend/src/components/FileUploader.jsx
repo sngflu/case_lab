@@ -1,17 +1,22 @@
 import React, { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { uploadFiles } from "../api/api";
+import Preview from "../components/Preview";
 
 const FileUploader = ({ onUpload }) => {
     const [selectedFiles, setSelectedFiles] = useState([]);
     const [uploading, setUploading] = useState(false);
 
     const onDrop = useCallback((acceptedFiles) => {
-        const filesWithPreviews = acceptedFiles.map(file => ({
-            file,
-            preview: URL.createObjectURL(file), // Для временного предпросмотра
-            name: file.name,
-        }));
+        const filesWithPreviews = acceptedFiles.map(file => {
+            const previewUrl = URL.createObjectURL(file);
+            console.log(`File: ${file.name}, Preview URL: ${previewUrl}`);
+            return {
+                file,
+                url: previewUrl,
+                name: file.name,
+            };
+        });
         setSelectedFiles(filesWithPreviews);
     }, []);
 
@@ -58,16 +63,12 @@ const FileUploader = ({ onUpload }) => {
                 )}
             </div>
             {selectedFiles.length > 0 && (
-                <div className="preview-grid">
-                    {selectedFiles.map((file, index) => (
-                        <div key={index} className="preview-item">
-                            <img src={file.preview} alt={file.name} className="preview-image" />
-                            <p>{file.name}</p>
-                        </div>
-                    ))}
+                <div>
+                    <h3>Выбранные файлы для загрузки:</h3>
+                    <Preview files={selectedFiles} />
                 </div>
             )}
-            <button onClick={handleFileUpload} disabled={uploading || selectedFiles.length === 0}>
+            <button onClick={handleFileUpload} disabled={uploading || selectedFiles.length === 0} className="page-button">
                 {uploading ? "Загрузка..." : "Обработать"}
             </button>
         </div>

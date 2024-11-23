@@ -1,5 +1,6 @@
+# src/backend/model/model.py
 import torch
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 from doclayout_yolo import YOLOv10
 
 CLASS_NAMES = [
@@ -27,7 +28,7 @@ class YOLOModel:
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.model = YOLOv10(weights_path).to(self.device)
 
-    def predict(self, image_path: str, conf_threshold: float = 0.75) -> list:
+    def predict(self, image_path: str, conf_threshold: float = 0.5) -> list:
         """
         Делает предсказание для одного изображения.
 
@@ -55,8 +56,10 @@ class YOLOModel:
             results (list): Результаты предсказаний.
             output_path (str): Путь для сохранения аннотированного изображения.
         """
-        image = Image.open(image_path)
+        image = Image.open(image_path).convert("RGB")
         draw = ImageDraw.Draw(image)
+        font_size = 40
+        font = ImageFont.load_default(size=font_size)
 
         for result in results:
             boxes = result.boxes.cpu().numpy()
@@ -68,9 +71,41 @@ class YOLOModel:
 
                 draw.rectangle([x1, y1, x2, y2], outline=color, width=3)
 
-                draw.text((x1, y1 - 10), class_name, fill=color)
+                text_position = (x1, y1 - font_size - 5)
+                draw.text(text_position, class_name, fill=color, font=font)
 
         image.save(output_path)
+
+    def create_json_annotation(self, image_path: str, image_height: int, image_width: int, results: list) -> dict:
+        """
+        Создание JSON-аннотации из результатов предсказания.
+
+        Args:
+            image_path (str): Путь к изображению.
+            image_height (int): Высота изображения.
+            image_width (int): Ширина изображения.
+            results (list): Результаты предсказания.
+
+        Returns:
+            dict: JSON-аннотация с координатами для каждого класса.
+        """
+        annotation = {
+            "image_height": image_height,
+            "image_width": image_width,
+            "image_path": str(image_path),
+        }
+
+        for class_name in CLASS_NAMES:
+            annotation[class_name] = []
+
+        for result in results:
+            boxes = result.boxes.cpu().numpy()
+            for box in boxes:
+                coords = box.xyxy[0].tolist()
+                class_name = CLASS_NAMES[int(box.cls[0])]
+                annotation[class_name].append(coords)
+
+        return annotation
 
 def load_model(weights_path: str) -> YOLOModel:
     """

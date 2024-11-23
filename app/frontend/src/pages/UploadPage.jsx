@@ -10,7 +10,7 @@ const UploadPage = ({ onProcessingComplete }) => {
         console.log("Uploading files:", files);
         setProcessedFiles(files);
         onProcessingComplete(files);
-        navigate('/results'); // Переход на страницу результатов
+        navigate('/results');
     };
 
     return (

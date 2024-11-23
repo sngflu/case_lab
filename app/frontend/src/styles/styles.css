@@ -44,7 +44,7 @@ input[type="file"]:focus {
     outline: none;
 }
 
-button {
+.page-button {
     background-color: #007bff;
     color: white;
     border: none;
@@ -57,9 +57,8 @@ button {
     display: inline-block;
 }
 
-button:hover {
+.page-button:hover {
     background-color: #0056b3;
-    transform: scale(1.05);
 }
 
 .back-button {
@@ -101,6 +100,7 @@ button:hover {
     width: 200px;
     text-align: center;
     transition: transform 0.3s ease, box-shadow 0.3s ease;
+    cursor: pointer;
 }
 
 .preview-item:hover {
@@ -179,4 +179,74 @@ h3 {
 button:disabled {
     background-color: #ccc;
     cursor: not-allowed;
+}
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    position: relative;
+    overflow: hidden;
+    width: 35%;
+    height: 80%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.modal-image {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    display: block;
+    object-fit: contain;
+    object-position: center;
+}
+
+.modal-close-button {
+    position: absolute;
+    top: 30px;
+    right: 70px;
+    background-color: #0000;
+    color: black;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.modal-close-button:hover {
+    background-color: #ffffff00;
+}
+
+.modal-nav-button {
+    position: absolute;
+    top: 50%;
+    background-color: rgba(255, 255, 255, 0.5);
+    color: black;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.modal-prev-button {
+    left: 10px;
+}
+
+.modal-next-button {
+    right: 10px;
 }
