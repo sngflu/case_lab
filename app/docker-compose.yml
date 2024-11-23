@@ -1,14 +1,4 @@
 services:
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "5173:5173"
-    container_name: grinatom-frontend
-    depends_on:
-      - backend
-
   backend:
     build:
       context: ./backend
@@ -18,3 +8,23 @@ services:
     container_name: grinatom-backend
     environment:
       - ENVIRONMENT=development
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    runtime: nvidia
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    container_name: grinatom-frontend
+    environment:
+      - PORT=5173
+    depends_on:
+      - backend
