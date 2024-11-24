@@ -1,5 +1,6 @@
 import React from "react";
 import DownloadButton from "../components/DownloadButton";
+import Preview from "../components/Preview";
 import { useNavigate } from "react-router-dom";
 import { cleanUp } from "../api/api";
 
@@ -16,23 +17,19 @@ const ResultsPage = ({ images }) => {
         }
     };
 
+    const handleDownload = () => {
+        // TODO: add some logic
+    };
+
     return (
         <div>
             <h2>Обработанные изображения</h2>
-            {images.length > 0 ? (
-                <div className="preview-grid">
-                    {images.map((image, index) => (
-                        <div key={index} className="preview-item">
-                            <img src={`http://127.0.0.1:8000/results/${image}`} alt={image} className="preview-image" />
-                            <p>{image}</p>
-                        </div>
-                    ))}
-                </div>
-            ) : (
-                <p>Нет обработанных изображений</p>
-            )}
-            <DownloadButton />
-            <button onClick={handleNavigateToHome}>На главную</button>
+            <Preview files={images.map(image => ({
+                url: `http://127.0.0.1:8000/results/${image}`,
+                name: image
+            }))} />
+            <DownloadButton onDownload={handleDownload} />
+            <button onClick={handleNavigateToHome} className="page-button">На главную</button>
         </div>
     );
 };

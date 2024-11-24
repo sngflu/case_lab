@@ -10,7 +10,13 @@ export const uploadFiles = async (formData, onUploadProgress) => {
 };
 
 export const downloadZip = async () => {
-    return axios.get(`${API_URL}/download/`, {
+    return axios.get(`${API_URL}/download/pics`, {
+        responseType: "blob",
+    });
+};
+
+export const downloadJson = async () => {
+    return axios.get(`${API_URL}/download/json/`, {
         responseType: "blob",
     });
 };
