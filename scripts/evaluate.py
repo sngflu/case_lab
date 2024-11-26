@@ -5,7 +5,7 @@ import numpy as np
 from pathlib import Path
 from doclayout_yolo import YOLOv10
 from tqdm import tqdm
-import wandb
+# import wandb
 from ultralytics.utils.metrics import ConfusionMatrix
 from collections import defaultdict
 import matplotlib.pyplot as plt
@@ -131,11 +131,11 @@ def plot_confusion_matrix(confusion_matrix, class_names):
 
 def main():
     # инициализация wandb
-    wandb.init(project="doclayout-evaluation", name="evaluation-run")
+    # wandb.init(project="doclayout-evaluation", name="evaluation-run")
     
     # пути к файлам и директориям
     project_root = Path.cwd()
-    weights_path = project_root / "runs/train/experiment4/weights/best.pt"
+    weights_path = project_root / "unreal_12plus.pt"
     test_dataset_dir = project_root / "test_dataset"
     images_dir = test_dataset_dir / "image"
     json_dir = test_dataset_dir / "json"
@@ -143,6 +143,7 @@ def main():
     # загружаем модель
     print("Загрузка модели...")
     model, device = load_model(weights_path)
+    print(model.names)
     
     # инициализация метрик
     conf_matrix = ConfusionMatrix(nc=len(class_names))
@@ -246,21 +247,21 @@ def main():
     conf_matrix_fig = plot_confusion_matrix(conf_matrix.matrix, class_names)
     
     # логирование в wandb
-    wandb.log({
-        'overall_precision': overall_metrics['precision'],
-        'overall_recall': overall_metrics['recall'],
-        'overall_f1': overall_metrics['f1'],
-        'overall_mean_iou': overall_metrics['mean_iou'],
-        'confusion_matrix': wandb.Image(conf_matrix_fig),
-        **{f"{class_name}_precision": metrics['precision']
-           for class_name, metrics in class_results.items()},
-        **{f"{class_name}_recall": metrics['recall']
-           for class_name, metrics in class_results.items()},
-        **{f"{class_name}_f1": metrics['f1']
-           for class_name, metrics in class_results.items()},
-        **{f"{class_name}_mean_iou": metrics['mean_iou']
-           for class_name, metrics in class_results.items()}
-    })
+    # wandb.log({
+    #     'overall_precision': overall_metrics['precision'],
+    #     'overall_recall': overall_metrics['recall'],
+    #     'overall_f1': overall_metrics['f1'],
+    #     'overall_mean_iou': overall_metrics['mean_iou'],
+    #     'confusion_matrix': wandb.Image(conf_matrix_fig),
+    #     **{f"{class_name}_precision": metrics['precision']
+    #        for class_name, metrics in class_results.items()},
+    #     **{f"{class_name}_recall": metrics['recall']
+    #        for class_name, metrics in class_results.items()},
+    #     **{f"{class_name}_f1": metrics['f1']
+    #        for class_name, metrics in class_results.items()},
+    #     **{f"{class_name}_mean_iou": metrics['mean_iou']
+    #        for class_name, metrics in class_results.items()}
+    # })
     
     # вывод результатов
     print("\nОбщие метрики:")
@@ -273,7 +274,7 @@ def main():
         for metric, value in metrics.items():
             print(f"{metric}: {value:.4f}")
     
-    wandb.finish()
+    # wandb.finish()
 
 if __name__ == "__main__":
     try:

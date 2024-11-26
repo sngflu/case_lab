@@ -1,39 +1,61 @@
 import React from "react";
 import { downloadZip, downloadJson } from "../api/api";
 
+/**
+ * Компонент кнопки для скачивания файлов.
+ *
+ * @param {Function} onDownload - Функция обратного вызова, вызываемая после завершения скачивания.
+ * @returns {JSX.Element} - Компонент кнопки для скачивания файлов.
+ */
 const DownloadButton = ({ onDownload }) => {
+    /**
+     * Обрабатывает скачивание файлов.
+     */
     const handleDownloadAll = async () => {
-        const response = await downloadZip();
+        try {
+            const response = await downloadZip();
 
-        if (!response.data) {
-            console.error("Ответ от API не содержит данных.");
-            alert("Не удалось скачать файлы.");
-            return;
+            if (!response.data) {
+                console.error("Ответ от API не содержит данных.");
+                alert("Не удалось скачать файлы.");
+                return;
+            }
+
+            const blob = new Blob([response.data], { type: "application/zip" });
+            const link = document.createElement("a");
+            link.href = window.URL.createObjectURL(blob);
+            link.download = "processed_images.zip";
+            link.click();
+            onDownload();
+        } catch (error) {
+            console.error("Ошибка при скачивании файлов:", error);
+            alert("Произошла ошибка при скачивании файлов.");
         }
-
-        const blob = new Blob([response.data], { type: "application/zip" });
-        const link = document.createElement("a");
-        link.href = window.URL.createObjectURL(blob);
-        link.download = "processed_images.zip";
-        link.click();
-        onDownload();
     };
 
+    /**
+     * Обрабатывает скачивание JSON файлов.
+     */
     const handleDownloadJson = async () => {
-        const response = await downloadJson();
+        try {
+            const response = await downloadJson();
 
-        if (!response.data) {
-            console.error("Ответ от API не содержит данных.");
-            alert("Не удалось скачать JSON файлы.");
-            return;
+            if (!response.data) {
+                console.error("Ответ от API не содержит данных.");
+                alert("Не удалось скачать JSON файлы.");
+                return;
+            }
+
+            const blob = new Blob([response.data], { type: "application/zip" });
+            const link = document.createElement("a");
+            link.href = window.URL.createObjectURL(blob);
+            link.download = "processed_json.zip";
+            link.click();
+            onDownload();
+        } catch (error) {
+            console.error("Ошибка при скачивании JSON файлов:", error);
+            alert("Произошла ошибка при скачивании JSON файлов.");
         }
-
-        const blob = new Blob([response.data], { type: "application/zip" });
-        const link = document.createElement("a");
-        link.href = window.URL.createObjectURL(blob);
-        link.download = "processed_json.zip";
-        link.click();
-        onDownload();
     };
 
     return (
