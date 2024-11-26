@@ -1,15 +1,14 @@
-import cv2
 import torch
 import json
 import numpy as np
 from pathlib import Path
-from doclayout_yolo import YOLOv10
 from tqdm import tqdm
 import wandb
 from ultralytics.utils.metrics import ConfusionMatrix
 from collections import defaultdict
 import matplotlib.pyplot as plt
 import seaborn as sns
+from ultralytics import YOLO
 
 class_names = [
     'title', 'paragraph', 'table', 'picture', 
@@ -19,7 +18,7 @@ class_names = [
 
 def load_model(weights_path):
     """Загрузка модели"""
-    model = YOLOv10(weights_path)
+    model = YOLO(weights_path)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model.to(device)
     return model, device
@@ -135,7 +134,7 @@ def main():
     
     # пути к файлам и директориям
     project_root = Path.cwd()
-    weights_path = project_root / "runs/train/experiment4/weights/best.pt"
+    weights_path = project_root / "runs/train/experiment2_yolov8/weights/best.pt"
     test_dataset_dir = project_root / "test_dataset"
     images_dir = test_dataset_dir / "image"
     json_dir = test_dataset_dir / "json"
