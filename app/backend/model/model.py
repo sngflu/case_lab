@@ -65,7 +65,7 @@ class YOLOModel:
         # Создаем объект для рисования на изображении
         draw = ImageDraw.Draw(image)
         # Устанавливаем размер шрифта
-        font_size = 10
+        font_size = 40
         font = ImageFont.load_default(size=font_size)
 
         # Обрабатываем каждый результат предсказания

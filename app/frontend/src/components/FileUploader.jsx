@@ -2,6 +2,7 @@ import React, { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { uploadFiles } from "../api/api";
 import Preview from "../components/Preview";
+import loading from '../assets/loading.svg';
 
 /**
  * Компонент для загрузки файлов.
@@ -19,12 +20,16 @@ const FileUploader = ({ onUpload }) => {
      * Обрабатывает перетаскивание файлов.
      *
      * @param {File[]} acceptedFiles - Массив принятых файлов.
+     * @param {File[]} rejectedFiles - Массив отклоненных файлов.
      */
-    const onDrop = useCallback((acceptedFiles) => {
+    const onDrop = useCallback((acceptedFiles, rejectedFiles) => {
+        if (rejectedFiles.length > 0) {
+            alert("Некоторые файлы имеют неподдерживаемый тип. Допустимые типы: PNG, JPEG, JPG, PDF.");
+        }
+
         // Создаем массив файлов с превью
         const newFilesWithPreviews = acceptedFiles.map(file => {
             const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
-            console.log(`File: ${file.name}, Preview URL: ${previewUrl}`);
             return {
                 file,
                 url: previewUrl,
@@ -93,9 +98,17 @@ const FileUploader = ({ onUpload }) => {
     const imageFiles = selectedFiles.filter(file => file.url);
     const pdfFiles = selectedFiles.filter(file => file.file.type === 'application/pdf');
 
+    if (uploading) {
+        return (
+            <div className="loading-indicator">
+                <img src={loading} alt="Loading..." />
+            </div>
+        );
+    }
+
     return (
         <div className="uploader-container">
-            <h2>Перетащите файлы для загрузки</h2>
+            <h2>Добавьте файлы для загрузки</h2>
             <div
                 {...getRootProps()}
                 className={`dropzone ${isDragActive ? "active" : ""}`}
@@ -112,13 +125,15 @@ const FileUploader = ({ onUpload }) => {
                     {pdfFiles.length > 0 && (
                         <div>
                             <h3>Загруженные PDF файлы:</h3>
-                            <div className="file-list">
-                                {pdfFiles.map((file, index) => (
-                                    <div key={index} className="file-item">
-                                        <p>{file.name}</p>
-                                        <button className="remove-button" onClick={() => handleRemoveFile(file)}>X</button>
-                                    </div>
-                                ))}
+                            <div className="pdf-list-container">
+                                <div className="file-list">
+                                    {pdfFiles.map((file, index) => (
+                                        <div key={index} className="file-item">
+                                            <p>{file.name}</p>
+                                            <button className="remove-button" onClick={() => handleRemoveFile(file)}>X</button>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     )}

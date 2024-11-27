@@ -20,7 +20,6 @@ const UploadPage = ({ onProcessingComplete }) => {
      * @param {Array} files - Массив обработанных файлов.
      */
     const handleUpload = (files) => {
-        console.log("Uploading files:", files);
         // Обновляем состояние обработанных файлов
         setProcessedFiles(files);
         // Вызываем функцию обратного вызова после завершения обработки файлов

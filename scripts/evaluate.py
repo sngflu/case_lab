@@ -135,7 +135,7 @@ def main():
     
     # пути к файлам и директориям
     project_root = Path.cwd()
-    weights_path = project_root / "unreal_12plus.pt"
+    weights_path = project_root / "model.pt"
     test_dataset_dir = project_root / "test_dataset"
     images_dir = test_dataset_dir / "image"
     json_dir = test_dataset_dir / "json"

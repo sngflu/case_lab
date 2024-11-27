@@ -8,7 +8,9 @@ body {
 }
 
 body {
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background-image: url('../assets/background.svg');
     background-size: cover;
     background-repeat: no-repeat;
@@ -16,8 +18,12 @@ body {
 }
 
 .container {
-    max-width: 900px;
-    margin: 10vh auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 5vw;
+    min-height: 8vh;
+    max-width: 40vw;
     padding: 20px;
     font-family: Arial, sans-serif;
     background-color: #f9f9f9;
@@ -42,6 +48,21 @@ input[type="file"] {
 input[type="file"]:focus {
     border-color: #007bff;
     outline: none;
+}
+
+h2,
+h3 {
+    color: #333;
+    margin-bottom: 20px;
+    font-weight: bold;
+}
+
+h2 {
+    font-size: 26px;
+}
+
+h3 {
+    font-size: 20px;
 }
 
 .page-button {
@@ -84,7 +105,6 @@ input[type="file"]:focus {
     justify-content: center;
     flex-wrap: wrap;
     gap: 10px;
-    margin-bottom: 20px;
 }
 
 .file-item {
@@ -94,6 +114,32 @@ input[type="file"]:focus {
     background-color: #f0f0f0;
     padding: 5px 10px;
     border-radius: 5px;
+}
+
+.pdf-list-container {
+    max-height: 12vh;
+    overflow-y: auto;
+    margin-bottom: 20px;
+    padding: 10px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.pdf-list-container::-webkit-scrollbar {
+    width: 10px;
+}
+
+.pdf-list-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.pdf-list-container::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 6px;
+}
+
+.pdf-list-container::-webkit-scrollbar-thumb:hover {
+    background: #555;
 }
 
 .remove-button {
@@ -132,7 +178,7 @@ input[type="file"]:focus {
     border-radius: 8px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
     overflow: hidden;
-    width: 200px;
+    width: 9vw;
     text-align: center;
     transition: transform 0.3s ease, box-shadow 0.3s ease;
     cursor: pointer;
@@ -173,31 +219,15 @@ input[type="file"]:focus {
     background: #555;
 }
 
-h2,
-h3 {
-    color: #333;
-    margin-bottom: 20px;
-    font-weight: bold;
-}
-
-h2 {
-    font-size: 26px;
-}
-
-h3 {
-    font-size: 20px;
-}
-
 .uploader-container {
     text-align: center;
-    margin-top: 20px;
+
 }
 
 .dropzone {
     margin: 20px auto;
     padding: 30px;
-    width: 100%;
-    max-width: 400px;
+    max-width: 80%;
     border: 2px dashed #007bff;
     border-radius: 10px;
     background-color: #f8f9fa;
@@ -285,4 +315,14 @@ button:disabled {
 
 .modal-next-button {
     right: 10px;
+}
+
+.loading-indicator {
+    display: flex;
+    justify-content: center;
+}
+
+.loading-indicator img {
+    width: 50px;
+    height: 50px;
 }

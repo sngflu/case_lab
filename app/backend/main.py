@@ -4,6 +4,9 @@ from typing import List
 from PIL import Image
 import json
 
+import warnings
+warnings.filterwarnings("ignore")
+
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles

@@ -60,17 +60,18 @@ const Preview = ({ files, onRemove, showRemoveButton = false }) => {
             <div className="preview-grid">
                 {files.map((file, index) => (
                     <div key={index} className="preview-item" onClick={() => openModal(index)}>
-                        {/* Отображение изображения */}
-                        <img src={file.url} alt={`Processed ${index}`} className="preview-image" />
                         {/* Кнопка удаления файла */}
                         {showRemoveButton && (
                             <button
                                 className="remove-button"
+                                style={{ position: 'absolute', zIndex: '10', bottom: '0px', right: '0px' }}
                                 onClick={(e) => { e.stopPropagation(); handleRemove(file); }}
                             >
                                 X
                             </button>
                         )}
+                        {/* Отображение изображения */}
+                        <img src={file.url} alt={`Processed ${index}`} className="preview-image" />
                     </div>
                 ))}
             </div>

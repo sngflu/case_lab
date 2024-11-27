@@ -4,10 +4,9 @@ import { downloadZip, downloadJson } from "../api/api";
 /**
  * Компонент кнопки для скачивания файлов.
  *
- * @param {Function} onDownload - Функция обратного вызова, вызываемая после завершения скачивания.
  * @returns {JSX.Element} - Компонент кнопки для скачивания файлов.
  */
-const DownloadButton = ({ onDownload }) => {
+const DownloadButton = ({ }) => {
     /**
      * Обрабатывает скачивание файлов.
      */
@@ -26,7 +25,6 @@ const DownloadButton = ({ onDownload }) => {
             link.href = window.URL.createObjectURL(blob);
             link.download = "processed_images.zip";
             link.click();
-            onDownload();
         } catch (error) {
             console.error("Ошибка при скачивании файлов:", error);
             alert("Произошла ошибка при скачивании файлов.");
@@ -51,7 +49,6 @@ const DownloadButton = ({ onDownload }) => {
             link.href = window.URL.createObjectURL(blob);
             link.download = "processed_json.zip";
             link.click();
-            onDownload();
         } catch (error) {
             console.error("Ошибка при скачивании JSON файлов:", error);
             alert("Произошла ошибка при скачивании JSON файлов.");
@@ -60,7 +57,7 @@ const DownloadButton = ({ onDownload }) => {
 
     return (
         <div>
-            <button onClick={handleDownloadAll} className="page-button">Скачать все файлы</button>
+            <button onClick={handleDownloadAll} className="page-button">Скачать изображения</button>
             <button onClick={handleDownloadJson} className="page-button">Скачать JSON файлы</button>
         </div>
     );
