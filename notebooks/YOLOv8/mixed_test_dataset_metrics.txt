@@ -1,0 +1,82 @@
+Метрики на тестовом датасете, включающем наши данные + данные другой группы:
+
+
+Общие метрики:
+precision: 0.9216
+recall: 0.9522
+f1: 0.9299
+mean_iou: 0.9521
+
+Метрики по классам:
+
+title:
+precision: 0.7553
+recall: 0.9843
+f1: 0.8547
+mean_iou: 0.9304
+
+paragraph:
+precision: 0.8432
+recall: 0.9447
+f1: 0.8911
+mean_iou: 0.9725
+
+table:
+precision: 0.9941
+recall: 1.0000
+f1: 0.9971
+mean_iou: 0.9799
+
+picture:
+precision: 1.0000
+recall: 1.0000
+f1: 1.0000
+mean_iou: 0.9862
+
+table_signature:
+precision: 0.9122
+recall: 0.9804
+f1: 0.9451
+mean_iou: 0.9402
+
+picture_signature:
+precision: 0.9978
+recall: 0.9891
+f1: 0.9934
+mean_iou: 0.9249
+
+numbered_list:
+precision: 0.6471
+recall: 0.9853
+f1: 0.7811
+mean_iou: 0.9781
+
+marked_list:
+precision: 0.9909
+recall: 0.9954
+f1: 0.9931
+mean_iou: 0.9784
+
+header:
+precision: 1.0000
+recall: 0.9619
+f1: 0.9806
+mean_iou: 0.9184
+
+footer:
+precision: 0.9991
+recall: 0.9587
+f1: 0.9785
+mean_iou: 0.9252
+
+footnote:
+precision: 0.9252
+recall: 0.6280
+f1: 0.7482
+mean_iou: 0.9616
+
+formula:
+precision: 0.9937
+recall: 0.9982
+f1: 0.9959
+mean_iou: 0.9291
