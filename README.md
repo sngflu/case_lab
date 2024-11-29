@@ -11,6 +11,8 @@
 
 - [test_from_telegram](https://github.com/sngflu/case_lab/tree/main/test_from_telegram) - обработанные изображения и разметка тестового файла, полученного в телеграме
 
+- [metrics_on_test_datasets](https://github.com/sngflu/case_lab/tree/main/metrics_on_test_datasets) - результаты работы модели на тестовых датасетах нашей и других групп
+
 ## Команда
 
 - [Громов Никита](https://www.github.com/sngflu)

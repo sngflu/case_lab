@@ -1,0 +1,79 @@
+Общие метрики:
+precision: 0.5314
+recall: 0.5977
+mean_iou: 0.9289
+f1: 0.5626
+
+Метрики по классам:
+
+title:
+precision: 0.2857
+recall: 0.7071
+f1: 0.4070
+mean_iou: 0.8941
+
+paragraph:
+precision: 0.5469
+recall: 0.9177
+f1: 0.6853
+mean_iou: 0.9384
+
+table:
+precision: 0.7937
+recall: 0.6667
+f1: 0.7246
+mean_iou: 0.9647
+
+picture:
+precision: 0.9062
+recall: 0.6905
+f1: 0.7838
+mean_iou: 0.8720
+
+table_signature:
+precision: 0.5556
+recall: 0.0526
+f1: 0.0962
+mean_iou: 0.8899
+
+picture_signature:
+precision: 0.8333
+recall: 0.1053
+f1: 0.1869
+mean_iou: 0.9008
+
+numbered_list:
+precision: 0.2154
+recall: 0.1522
+f1: 0.1783
+mean_iou: 0.9059
+
+marked_list:
+precision: 0.1923
+recall: 0.0602
+f1: 0.0917
+mean_iou: 0.7820
+
+header:
+precision: 1.0000
+recall: 0.2781
+f1: 0.4351
+mean_iou: 0.9294
+
+footer:
+precision: 1.0000
+recall: 0.1057
+f1: 0.1912
+mean_iou: 0.8293
+
+footnote:
+precision: 0.0000
+recall: 0.0000
+f1: 0.0000
+mean_iou: 0.0000
+
+formula:
+precision: 0.3248
+recall: 0.7907
+f1: 0.4605
+mean_iou: 0.8417
